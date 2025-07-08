@@ -16,8 +16,13 @@ class HindustanTimesScraper(BaseNewsScraper):
         "content-type": "application/json",
         "origin": "https://www.hindustantimes.com",
         "referer": "https://www.hindustantimes.com/search",
-        "user-agent": "Mozilla/5.0 (compatible; ShottifyBot/1.0)",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
     }
+
+    def _build_params(self, *, keyword: str, page: int, size: int, **kwargs: Any) -> Dict[str, Any]:
+        """Empty dictionary returned as Hindustan Times doesn't accept any params"""
+
+        return {}
 
     def _build_payload(self, *, keyword: str, page: int, size: int, **kwargs: Any) -> Dict[str, Any]:
         """Render the JSON body expected by Hindustan Times."""
@@ -29,10 +34,10 @@ class HindustanTimesScraper(BaseNewsScraper):
             "type": kwargs.get("type", "story"),
         }
 
-    def _parse_response(self, j: Dict[str, Any]) -> List[Article]:
+    def _parse_response(self, json_data: Dict[str, Any]) -> List[Article]:
         """Map Hindustan Times JSON → Article objects."""
 
-        raw_list = j.get("content") if j else []
+        raw_list = json_data.get("content") if json_data else []
         if not isinstance(raw_list, list):
             return []
 

@@ -63,6 +63,7 @@ class BaseNewsScraper(ABC):
     #: override these in subclasses
     BASE_URL: str | None = None
     DEFAULT_HEADERS: Dict[str, str] = {}
+    REQUEST_METHOD: str = "POST"
 
     def __init__(
         self,
@@ -81,9 +82,11 @@ class BaseNewsScraper(ABC):
     ) -> List[Article]:
         """Return a list of `Article` objects for the given query."""
 
+        params = self._build_params(keyword=keyword, page=page, size=size, **kwargs)
+        logger.debug("Payload built: %s", params)
         payload = self._build_payload(keyword=keyword, page=page, size=size, **kwargs)
         logger.debug("Payload built: %s", payload)
-        data = self._post_json(self.BASE_URL, payload)
+        data = self._fetch_json(self.BASE_URL, params, payload)
         raw_items = self._parse_response(data)
 
         # Ensure every article has a summary – subclasses may leave it blank.
@@ -93,6 +96,10 @@ class BaseNewsScraper(ABC):
         return raw_items
 
     # ─────────────── subclass hooks ───────────────
+
+    @abstractmethod
+    def _build_params(self, *, keyword: str, page: int, size: int, **kwargs: Any) -> Dict[str, Any]:
+        """Return the URL Query Parameters expected by the remote service."""
 
     @abstractmethod
     def _build_payload(self, *, keyword: str, page: int, size: int, **kwargs: Any) -> Dict[str, Any]:
@@ -111,13 +118,20 @@ class BaseNewsScraper(ABC):
         parts = re.split(r"(?<=[.!?])\s+", text.strip())
         return " ".join(parts[: sentences]).strip()
 
-    def _post_json(self, url: str, payload: Dict[str, Any]) -> Dict[str, Any]:  # noqa: D401
-        """Make a POST request with retries & error handling."""
+    def _fetch_json(self, url: str, params: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Make a GET/POST request with retries & error handling."""
 
         start = time.perf_counter()
         resp = self.session.post(
             url,
+            params=params,
             json=payload,
+            headers=self.DEFAULT_HEADERS,
+            timeout=self.timeout,
+            proxies=self.proxies,
+        ) if self.REQUEST_METHOD == "POST" else self.session.get(
+            url,
+            params=params,
             headers=self.DEFAULT_HEADERS,
             timeout=self.timeout,
             proxies=self.proxies,
