@@ -124,7 +124,8 @@ class ArticleModel(BaseModel):
     media: List[MediaItemModel] = []
     outlet: Optional[str] = None
     tags: List[str] = []
-    section: Optional[str] = None
+    # sections can be single string or list[str]
+    section: str | List[str] | None = None
 
     @classmethod
     def from_article(cls, art: Article):  # type: ignore[override]
