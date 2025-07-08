@@ -45,6 +45,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from typing import List, Optional
+import datetime
 
 from fastapi import FastAPI
 from pydantic import BaseModel, Field, field_validator
@@ -113,11 +114,12 @@ class MediaItemModel(BaseModel):
 
 class ArticleModel(BaseModel):
     title: Optional[str] = None
-    published_at: Optional[str] = None
+    # allow timestamp (int/float), datetime, or ISO string
+    published_at: str | int | float | datetime.datetime | None = None
     url: Optional[str] = None
     content: Optional[str] = None
     summary: Optional[str] = None
-    # *Some scrapers capture multiple authors* → allow list[str] as well.
+    # authors can be single string or list[str]
     author: str | List[str] | None = None
     media: List[MediaItemModel] = []
     outlet: Optional[str] = None
@@ -126,7 +128,22 @@ class ArticleModel(BaseModel):
 
     @classmethod
     def from_article(cls, art: Article):  # type: ignore[override]
-        return cls(**asdict(art))
+        """Convert a news_scrapers.base.Article instance into an ArticleModel.
+
+        Ensures *published_at* is **always** an ISO‑8601 string for JSON output.
+        """
+        data = asdict(art)
+        ts = data.get("published_at")
+        if isinstance(ts, (int, float)) and ts > 0:
+            try:
+                dt = datetime.datetime.fromtimestamp(ts)
+                data["published_at"] = dt.isoformat()
+            except Exception:
+                data["published_at"] = str(ts)
+        elif isinstance(ts, datetime.datetime):
+            data["published_at"] = ts.isoformat()
+        # else leave as‑is if already string / None
+        return cls(**data)
 
 
 # ---------------------------------------------------------------------------
