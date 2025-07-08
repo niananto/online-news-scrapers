@@ -1,7 +1,10 @@
-from .base import BaseNewsScraper  # noqa: F401, E402
-from .hindustan_times import HindustanTimesScraper  # noqa: F401, E402
+from .base import BaseNewsScraper
+from .hindustan_times import HindustanTimesScraper
+from .business_standard import BusinessStandardScraper
+from .news18 import News18Scraper
 
 __all__ = [
-    "BaseNewsScraper",
     "HindustanTimesScraper",
+    "BusinessStandardScraper",
+    "News18Scraper",
 ]
