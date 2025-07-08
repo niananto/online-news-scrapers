@@ -20,7 +20,7 @@ class BusinessStandardScraper(BaseNewsScraper):
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
     }
 
-    IMG_PREFIX = "https://www.business-standard.com"  # image_path is relative
+    IMG_PREFIX = "https://bsmedia.business-standard.com"  # image_path is relative
     URL_PREFIX = "https://www.business-standard.com"  # article_url is relative
 
     def _build_params(self, *, keyword: str, page: int, size: int, **kwargs: Any) -> Dict[str, Any]:
