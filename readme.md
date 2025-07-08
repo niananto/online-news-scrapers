@@ -1,4 +1,4 @@
-# Shottify Scraping – FastAPI Gateway
+# Online News Scrapers – FastAPI Gateway
 
 A minimal **FastAPI** service that spawns individual news‑site scrapers on demand and returns a clean JSON feed.\
 Out‑of‑the‑box it supports:
@@ -154,5 +154,5 @@ Pull requests are welcome!  Please run `ruff` and `black` before submitting and 
 
 ---
 
-© 2025 Shottify – MIT License
+© 2025 Nazmul Islam Ananto – MIT License
 
