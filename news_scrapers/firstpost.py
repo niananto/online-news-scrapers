@@ -4,8 +4,10 @@ from datetime import datetime, timezone
 import json
 import re
 import logging
+import html
 from typing import Any, Dict, List, Optional
 
+from bs4 import BeautifulSoup  # type: ignore
 import requests
 
 from news_scrapers import BaseNewsScraper
@@ -15,7 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 class FirstpostScraper(BaseNewsScraper):
-    """Scraper for Firstpost keyword search (+ detail enrichment)."""
+    """Scraper for Firstpost keyword search (+ detail enrichment).
+
+    This variant **cleans** the HTML returned in *body* / *app_body* so that
+    downstream pipelines receive **plain‑text** only, mirroring the approach
+    used in :class:`HindustanTimesScraper`.
+    """
 
     BASE_URL = "https://api-mt.firstpost.com/nodeapi/v1/mfp/get-article-list"
     DETAIL_URL = "https://api-mt.firstpost.com/nodeapi/v1/mfp/get-article"
@@ -32,17 +39,20 @@ class FirstpostScraper(BaseNewsScraper):
         ),
     }
 
+    # ------------------------------------------------------------------
+    # public search – limit size <= 50 (API hard‑limit)
+    # ------------------------------------------------------------------
     def search(
         self, keyword: str, page: int = 1, size: int = 30, **kwargs: Any
     ) -> List[Article]:
         if size > 50:
-            logger.warning("size must be less than or equal to 50, continuing with 50...")
+            logger.warning("size must be less than or equal to 50, continuing with 50…")
             size = 50
         return super().search(keyword, page, size, **kwargs)
 
-    # ---------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # helpers
-    # ---------------------------------------------------------------------
+    # ------------------------------------------------------------------
     @staticmethod
     def _json_serialize(obj: Any) -> str:
         """Serialize *obj* as compact JSON (no spaces/newlines)."""
@@ -50,7 +60,7 @@ class FirstpostScraper(BaseNewsScraper):
 
     @staticmethod
     def _extract_article_id(url: str | None) -> Optional[str]:
-        """Return numeric id from *weburl*, e.g. ``...-13903975.html`` → "13903975"."""
+        """Return numeric id from *weburl*, e.g. ``…-13903975.html`` → "13903975"."""
         if not url:
             return None
         m = re.search(r"-(\d+)\.html?$", url)
@@ -69,8 +79,17 @@ class FirstpostScraper(BaseNewsScraper):
         except Exception:
             return None
 
+    # ----------------------------- HTML → plain‑text -----------------------------
+    @staticmethod
+    def _clean_html(raw: str | None) -> str | None:
+        """Strip *raw* HTML → plain text; collapse whitespace; decode entities."""
+        if not raw:
+            return None
+        text = BeautifulSoup(html.unescape(raw), "lxml").get_text(" ", strip=True)
+        return re.sub(r"\s+", " ", text).strip() or None
+
     # ------------------------------------------------------------------
-    # mandatory BaseNewsScraper overrides
+    # BaseNewsScraper mandatory overrides
     # ------------------------------------------------------------------
     def _build_params(
         self,
@@ -99,9 +118,9 @@ class FirstpostScraper(BaseNewsScraper):
         """Firstpost uses *GET* only → empty payload."""
         return {}
 
-    # --------------------------------------------------------------
+    # ------------------------------------------------------------------
     # core response parsing
-    # --------------------------------------------------------------
+    # ------------------------------------------------------------------
     def _parse_response(self, json_data: Dict[str, Any]) -> List[Article]:
         raw_list = json_data.get("data") if json_data else []
         if not isinstance(raw_list, list):
@@ -112,20 +131,21 @@ class FirstpostScraper(BaseNewsScraper):
             weburl: str | None = item.get("weburl")
             article_id = self._extract_article_id(weburl)
 
-            # Cheap media extraction (only lead image).
+            # Lead image (if present)
             media_items: list[MediaItem] = []
-            img: dict | None = item.get("images")
-            if img and img.get("url"):
+            if (img := item.get("images")) and img.get("url"):
                 media_items.append(
                     MediaItem(url=img["url"], caption=img.get("caption"), type="image")
                 )
+
+            summary_clean = self._clean_html(item.get("intro"))
 
             art = Article(
                 title=item.get("display_headline") or item.get("headline"),
                 published_at=None,  # will fill after detail call
                 url=weburl,
                 content=None,
-                summary=item.get("intro"),
+                summary=summary_clean,
                 author=(
                     ", ".join(item.get("byline", [])) if item.get("byline") else None
                 ),
@@ -141,14 +161,14 @@ class FirstpostScraper(BaseNewsScraper):
                     detail_json = self._fetch_article_details(article_id)
                     self._merge_detail(art, detail_json)
                 except Exception:  # pragma: no cover – keep scraper robust
-                    pass
+                    logger.exception("Failed to hydrate %s", weburl)
 
             articles.append(art)
         return articles
 
-    # ------------------------------------------------------------
+    # ------------------------------------------------------------------
     # detail helpers
-    # ------------------------------------------------------------
+    # ------------------------------------------------------------------
     def _fetch_article_details(self, article_id: str) -> Dict[str, Any]:
         params = {"article_id": article_id}
         resp = requests.get(
@@ -163,8 +183,28 @@ class FirstpostScraper(BaseNewsScraper):
             or self._epoch_to_iso(detail.get("epoch"))
             or detail.get("created_at")
         )
-        art.content = art.content or detail.get("body") or detail.get("app_body")
-        art.summary = art.summary or detail.get("intro")
+
+        # body/app_body may carry HTML or JSON – prefer *body* when available.
+        body_raw = detail.get("body") or ""
+        content_clean = self._clean_html(body_raw)
+        if not content_clean and (app_body := detail.get("app_body")):
+            # `app_body` is often a JSON string with content fragments – fallback:
+            try:
+                blocks = json.loads(app_body)
+                if isinstance(blocks, list):
+                    texts = []
+                    for blk in blocks:
+                        if isinstance(blk, dict):
+                            txt = self._clean_html(blk.get("contentBody")) or blk.get("text")
+                            if txt:
+                                texts.append(txt)
+                    content_clean = "\n".join(texts) if texts else None
+            except Exception:
+                pass
+        art.content = art.content or content_clean
+
+        art.summary = art.summary or self._clean_html(detail.get("intro"))
+
         # author handling – prefer detail.
         authors = detail.get("author_byline") or []
         names = [a.get("english_name") for a in authors if a.get("english_name")]
@@ -180,8 +220,7 @@ class FirstpostScraper(BaseNewsScraper):
         )
 
         # images list in detail – enrich media.
-        img = detail.get("images")
-        if img and img.get("url") and not art.media:
+        if (img := detail.get("images")) and img.get("url") and not art.media:
             art.media.append(
                 MediaItem(url=img["url"], caption=img.get("caption"), type="image")
             )
@@ -189,11 +228,15 @@ class FirstpostScraper(BaseNewsScraper):
 
 # ─────────────────── tiny sanity demo ───────────────────
 if __name__ == "__main__":  # pragma: no cover
+    logging.basicConfig(level=logging.INFO)
+
     scraper = FirstpostScraper()
-    arts = scraper.search("bangladesh", page=1, size=51)
+    arts = scraper.search("bangladesh", page=1, size=50)
     for a in arts[:3]:
         print(a.published_at, "–", a.author, "-", a.title)
         print(a.url)
+        print("summary:", a.summary)
+        print("content snippet:", (a.content or "")[:140], "…")
         print("tags:", a.tags, "section:", a.section)
         print("media:", a.media[:1] if a.media else None)
         print()
