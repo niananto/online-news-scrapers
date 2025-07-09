@@ -4,9 +4,10 @@ from news_scrapers import (BaseNewsScraper,
                            News18Scraper,
                            FirstpostScraper,
                            RepublicWorldScraper,
-                           IndiaDotComScraper)
+                           IndiaDotComScraper,
+                           StatesmanScraper,)
 
-scraper: BaseNewsScraper = HindustanTimesScraper()
+scraper: BaseNewsScraper = StatesmanScraper()
 articles = scraper.search("bangladesh", page=1, size=50)
 for article in articles:
     print(f"{article.published_at} – {article.outlet} - {article.author} - {article.title}\n"
