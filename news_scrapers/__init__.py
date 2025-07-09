@@ -6,6 +6,7 @@ from .firstpost import FirstpostScraper
 from .republic_world import RepublicWorldScraper
 from .india_dotcom import IndiaDotComScraper
 from .statesman import StatesmanScraper
+from .daily_pioneer import DailyPioneerScraper
 
 __all__ = [
     "BaseNewsScraper",
@@ -16,4 +17,5 @@ __all__ = [
     "RepublicWorldScraper",
     "IndiaDotComScraper",
     "StatesmanScraper",
+    "DailyPioneerScraper",
 ]
