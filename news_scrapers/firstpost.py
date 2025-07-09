@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import json
-import re
-import logging
-import html
 from typing import Any, Dict, List, Optional
+import html
+import json
+import logging
+import re
 
 from bs4 import BeautifulSoup  # type: ignore
 import requests
@@ -17,18 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 class FirstpostScraper(BaseNewsScraper):
-    """Scraper for Firstpost keyword search (+ detail enrichment).
-
-    This variant **cleans** the HTML returned in *body* / *app_body* so that
-    downstream pipelines receive **plain‑text** only, mirroring the approach
-    used in :class:`HindustanTimesScraper`.
-    """
+    """Scraper for **Firstpost** keyword search (with detail enrichment)."""
 
     BASE_URL = "https://api-mt.firstpost.com/nodeapi/v1/mfp/get-article-list"
     DETAIL_URL = "https://api-mt.firstpost.com/nodeapi/v1/mfp/get-article"
     REQUEST_METHOD = "GET"
 
-    DEFAULT_HEADERS: Dict[str, str] = {
+    HEADERS: Dict[str, str] = {
         "accept": "application/json, text/plain, */*",
         "origin": "https://www.firstpost.com",
         "referer": "https://www.firstpost.com/",
@@ -39,15 +34,25 @@ class FirstpostScraper(BaseNewsScraper):
         ),
     }
 
-    # ------------------------------------------------------------------
-    # public search – limit size <= 50 (API hard‑limit)
-    # ------------------------------------------------------------------
+    # ─────────────────── new-style entry-point ───────────────────
     def search(
         self, keyword: str, page: int = 1, size: int = 30, **kwargs: Any
     ) -> List[Article]:
         if size > 50:
-            logger.warning("size must be less than or equal to 50, continuing with 50…")
+            logger.warning("size must be ≤ 50, truncating to 50")
             size = 50
+
+        offset = max(page - 1, 0) * size
+        self.PARAMS = {
+            "count": str(size),
+            "offset": str(offset),
+            "fields": (
+                "headline,images,display_headline,display,"
+                "weburl_r,weburl,byline,intro,has_video"
+            ),
+            "filter": json.dumps({"tags.slug": keyword.lower()}, separators=(",", ":")),
+        }
+        self.PAYLOAD = {}
         return super().search(keyword, page, size, **kwargs)
 
     # ------------------------------------------------------------------
@@ -87,36 +92,6 @@ class FirstpostScraper(BaseNewsScraper):
             return None
         text = BeautifulSoup(html.unescape(raw), "lxml").get_text(" ", strip=True)
         return re.sub(r"\s+", " ", text).strip() or None
-
-    # ------------------------------------------------------------------
-    # BaseNewsScraper mandatory overrides
-    # ------------------------------------------------------------------
-    def _build_params(
-        self,
-        *,
-        keyword: str,
-        page: int,
-        size: int,
-        **kwargs: Any,
-    ) -> Dict[str, Any]:
-        """Construct *GET* query‑string params for the list API."""
-        offset = max(page - 1, 0) * size
-        filter_q = {"tags.slug": keyword.lower()}
-        return {
-            "count": str(size),
-            "offset": str(offset),
-            "fields": (
-                "headline,images,display_headline,display,"  # headline/visuals
-                "weburl_r,weburl,byline,intro,has_video"      # misc
-            ),
-            "filter": self._json_serialize(filter_q),
-        }
-
-    def _build_payload(
-        self, *, keyword: str, page: int, size: int, **kwargs: Any
-    ) -> Dict[str, Any]:
-        """Firstpost uses *GET* only → empty payload."""
-        return {}
 
     # ------------------------------------------------------------------
     # core response parsing
@@ -172,7 +147,7 @@ class FirstpostScraper(BaseNewsScraper):
     def _fetch_article_details(self, article_id: str) -> Dict[str, Any]:
         params = {"article_id": article_id}
         resp = requests.get(
-            self.DETAIL_URL, headers=self.DEFAULT_HEADERS, params=params, timeout=20
+            self.DETAIL_URL, headers=self.HEADERS, params=params, timeout=20
         )
         resp.raise_for_status()
         return resp.json().get("data", {})
@@ -228,15 +203,13 @@ class FirstpostScraper(BaseNewsScraper):
 
 # ─────────────────── tiny sanity demo ───────────────────
 if __name__ == "__main__":  # pragma: no cover
-    logging.basicConfig(level=logging.INFO)
-
     scraper = FirstpostScraper()
-    arts = scraper.search("bangladesh", page=1, size=50)
-    for a in arts[:3]:
-        print(a.published_at, "–", a.author, "-", a.title)
-        print(a.url)
-        print("summary:", a.summary)
-        print("content snippet:", (a.content or "")[:140], "…")
-        print("tags:", a.tags, "section:", a.section)
-        print("media:", a.media[:1] if a.media else None)
-        print()
+    articles = scraper.search("bangladesh", page=1, size=50)
+    for article in articles:
+        print(f"{article.published_at} – {article.outlet} - {article.author} - {article.title}\n"
+              f"{article.url}\n"
+              f"Summary: {article.summary}\n"
+              f"Content: {article.content[:120] if article.content else ''} ...\n"
+              f"{article.media}\n"
+              f"{article.tags} - {article.section}\n")
+    print(f"{len(articles)} articles found")

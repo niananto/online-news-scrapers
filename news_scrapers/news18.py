@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 class News18Scraper(BaseNewsScraper):
     """Scraper for **News18.com** search & article pages."""
 
-    BASE_URL: str = "https://api-en.news18.com/nodeapi/v1/eng/get-article-list"
-    REQUEST_METHOD: str = "GET"  # GET not POST
+    BASE_URL = "https://api-en.news18.com/nodeapi/v1/eng/get-article-list"
+    REQUEST_METHOD = "GET"
 
-    DEFAULT_HEADERS: Dict[str, str] = {
+    HEADERS: Dict[str, str] = {
         "accept": "application/json, text/plain, */*",
         "origin": "https://www.news18.com",
         "referer": "https://www.news18.com/",
@@ -32,36 +32,26 @@ class News18Scraper(BaseNewsScraper):
         ),
     }
 
+    # ─────────────────── new-style entry-point ───────────────────
     def search(
         self, keyword: str, page: int = 1, size: int = 30, **kwargs: Any
     ) -> List[Article]:
         if size > 50:
-            logger.warning("size must be less than or equal to 50, continuing with 50...")
+            logger.warning("size must be ≤ 50, truncating to 50")
             size = 50
-        return super().search(keyword, page, size, **kwargs)
 
-    def _build_params(self, *, keyword: str, page: int, size: int, **kwargs: Any) -> Dict[str, Any]:
-        """Return the *query‑string* dictionary for the search request."""
-        offset: int = max(page - 1, 0) * size
-
-        # Fields we wish to retrieve in the thin search payload.  *weburl* is
-        # already absolute, *weburl_r* is the relative path fallback.
-        search_fields: str = (
-            "headline,created_at,story_id,categories,images,display_headline, "
-            "weburl,post_type,weburl_r"
+        offset = max(page - 1, 0) * size
+        search_fields = (
+            "headline,created_at,categories,images,display_headline,weburl,weburl_r"
         )
 
-        return {
+        self.PARAMS = {
             "count": str(size),
             "offset": str(offset),
             "fields": kwargs.get("fields", search_fields),
-            # The API filter expects **stringified JSON**.
             "filter": json.dumps({"global_search": keyword}, separators=(",", ":")),
         }
-
-    def _build_payload(self, *, keyword: str, page: int, size: int, **_kwargs: Any) -> Dict[str, Any]:
-        """News18 search uses *GET* so we send an empty body."""
-        return {}
+        return super().search(keyword, page, size, **kwargs)
 
     def _parse_response(self, json_data: Dict[str, Any]) -> List[Article]:
         """Translate the search‑API JSON into :class:`Article` objects."""
@@ -138,7 +128,7 @@ class News18Scraper(BaseNewsScraper):
         1. Embedded *NewsArticle* JSON‑LD (Schema.org).
         2. DOM fall‑backs for author, body, and tags.
         """
-        resp = self.session.get(url, headers=self.DEFAULT_HEADERS, timeout=20)
+        resp = self.session.get(url, headers=self.HEADERS, timeout=20)
         resp.raise_for_status()
 
         soup = BeautifulSoup(resp.text, "lxml")
@@ -249,19 +239,13 @@ class News18Scraper(BaseNewsScraper):
 
 # ───────────────────────────────── demo ──────────────────────────────────
 if __name__ == "__main__":
-    import itertools as _it
-
-    logging.basicConfig(level=logging.INFO)
-
     scraper = News18Scraper()
-    articles = scraper.search("bangladesh", page=1, size=51)
-    for art in _it.islice(articles, 5):
-        print("\n==>", art.title)
-        print("URL:", art.url)
-        print("Date:", art.published_at)
-        print("Author:", art.author)
-        print("Tags:", art.tags)
-        print("Media:", art.media[:2])
-        if art.content:
-            print("Snippet:", art.content[:150], "…")
-    print(f"Total fetched: {len(articles)}")
+    articles = scraper.search("bangladesh", page=1, size=50)
+    for article in articles:
+        print(f"{article.published_at} – {article.outlet} - {article.author} - {article.title}\n"
+              f"{article.url}\n"
+              f"Summary: {article.summary}\n"
+              f"Content: {article.content[:120] if article.content else ''} ...\n"
+              f"{article.media}\n"
+              f"{article.tags} - {article.section}\n")
+    print(f"{len(articles)} articles found")

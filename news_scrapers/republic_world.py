@@ -16,14 +16,14 @@ logger = logging.getLogger(__name__)
 
 
 class RepublicWorldScraper(BaseNewsScraper):
-    """Scraper for **Republic World** elastic‑search API + article pages."""
+    """Scraper for **Republic World** elastic-search API + article pages."""
 
-    BASE_URL: str = (
+    BASE_URL = (
         "https://public-api-dot-republic-world-prod.el.r.appspot.com/api/search/es"
     )
-    REQUEST_METHOD: str = "GET"  # GET – no request body
+    REQUEST_METHOD = "GET"
 
-    DEFAULT_HEADERS: Dict[str, str] = {
+    HEADERS: Dict[str, str] = {
         "accept": "application/json, text/plain, */*",
         "origin": "https://www.republicworld.com",
         "referer": "https://www.republicworld.com/",
@@ -32,38 +32,25 @@ class RepublicWorldScraper(BaseNewsScraper):
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/138.0.0.0 Safari/537.36"
         ),
-        # The site expects two custom headers present in the sample *curl*.
         "lang": "E",
         "platform": "WEB",
     }
 
-    IMG_PREFIX: str = "https://img.republicworld.com/"  # prepend to *filePath*
-    URL_PREFIX: str = "https://www.republicworld.com/"  # prepend to *completeSlug*
+    IMG_PREFIX = "https://img.republicworld.com/"
+    URL_PREFIX = "https://www.republicworld.com/"
 
-    # ------------------------------------------------------------------
-    # BaseNewsScraper mandatory overrides
-    # ------------------------------------------------------------------
-    def _build_params(
-        self,
-        *,
-        keyword: str,
-        page: int,
-        size: int,
-        **kwargs: Any,
-    ) -> Dict[str, Any]:
-        """Return the query‑string dict expected by Republic World."""
-        return {
+    # ─────────────────── new-style entry-point ───────────────────
+    def search(
+        self, keyword: str, page: int = 1, size: int = 30, **kwargs: Any
+    ) -> List[Article]:
+        self.PARAMS = {
             "search": keyword,
             "pageSize": str(size),
             "page": str(page),
             "searchType": kwargs.get("searchType", "ARTICLE"),
         }
-
-    def _build_payload(
-        self, *, keyword: str, page: int, size: int, **_kwargs: Any
-    ) -> Dict[str, Any]:
-        """The API is *GET* only – no JSON body sent."""
-        return {}
+        self.PAYLOAD = {}
+        return super().search(keyword, page, size, **kwargs)
 
     # ------------------------------------------------------------------
     # core JSON‑response parsing
@@ -151,7 +138,7 @@ class RepublicWorldScraper(BaseNewsScraper):
         1. Embedded *NewsArticle* JSON‑LD (Schema.org)
         2. DOM fall‑backs for author, body, and tags.
         """
-        resp = self.session.get(url, headers=self.DEFAULT_HEADERS, timeout=20)
+        resp = self.session.get(url, headers=self.HEADERS, timeout=20)
         resp.raise_for_status()
 
         soup = BeautifulSoup(resp.text, "lxml")
@@ -283,15 +270,12 @@ class RepublicWorldScraper(BaseNewsScraper):
 # ─────────────────── tiny sanity demo ───────────────────
 if __name__ == "__main__":  # pragma: no cover – manual testing only
     scraper = RepublicWorldScraper()
-    arts = scraper.search("bangladesh", page=1, size=51)
-    for art in arts:
-        print("\n=>", art.title)
-        print("URL:", art.url)
-        print("Date:", art.published_at)
-        print("Author:", art.author)
-        print("Section:", art.section)
-        print("Tags:", art.tags[:5])
-        print("Media:", art.media[:1])
-        if art.content:
-            print("Snippet:", art.content[:120], "…")
-    print(f"Total fetched: {len(arts)}")
+    articles = scraper.search("bangladesh", page=1, size=50)
+    for article in articles:
+        print(f"{article.published_at} – {article.outlet} - {article.author} - {article.title}\n"
+              f"{article.url}\n"
+              f"Summary: {article.summary}\n"
+              f"Content: {article.content[:120] if article.content else ''} ...\n"
+              f"{article.media}\n"
+              f"{article.tags} - {article.section}\n")
+    print(f"{len(articles)} articles found")

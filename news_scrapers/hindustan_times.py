@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-"""Hindustan Times keyword‑search scraper.
-
-This variant cleans HTML tags/entities out of the *content* and *summary*
-fields returned by the API so that downstream consumers receive plain‑text.
-"""
+"""Hindustan Times keyword-search scraper – updated for the new BaseNewsScraper."""
 
 from typing import Any, Dict, List
 import html
@@ -20,8 +16,9 @@ class HindustanTimesScraper(BaseNewsScraper):
     """Scraper for **Hindustan Times** public search API."""
 
     BASE_URL = "https://api.hindustantimes.com/api/articles/search"
-
-    DEFAULT_HEADERS: Dict[str, str] = {
+    REQUEST_METHOD = "POST"
+    # ← renamed to match the new base-class field
+    HEADERS: Dict[str, str] = {
         "accept": "application/json, text/javascript, */*; q=0.01",
         "content-type": "application/json",
         "origin": "https://www.hindustantimes.com",
@@ -33,43 +30,36 @@ class HindustanTimesScraper(BaseNewsScraper):
         ),
     }
 
-    # ------------------------------------------------------------------
-    # helpers
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _clean_html(raw: str | None) -> str | None:
-        """Return *raw* stripped of HTML tags/entities ⇒ plain‑text.
-
-        * None → None  (keeps dataclass fields None instead of "")
-        * Collapses runs of whitespace to a single space and trims ends.
-        """
-
-        if not raw:
-            return None
-        # Decode HTML entities first so BeautifulSoup sees e.g. "₹" not "&amp;#8377;".
-        raw_unescaped: str = html.unescape(raw)
-        text: str = BeautifulSoup(raw_unescaped, "lxml").get_text(" ", strip=True)
-        return re.sub(r"\s+", " ", text).strip() or None
-
-    # ------------------------------------------------------------------
-    # BaseNewsScraper mandatory overrides
-    # ------------------------------------------------------------------
-    def _build_params(self, *, keyword: str, page: int, size: int, **kwargs: Any) -> Dict[str, Any]:
-        """Hindustan Times search endpoint accepts no query‑string params."""
-        return {}
-
-    def _build_payload(self, *, keyword: str, page: int, size: int, **kwargs: Any) -> Dict[str, Any]:
-        """Render the JSON body expected by the Hindustan Times POST endpoint."""
-        return {
+    # ------------------------------------------------------------------ #
+    # minimal glue for the new BaseNewsScraper                           #
+    # ------------------------------------------------------------------ #
+    def search(
+        self, keyword: str, page: int = 1, size: int = 30, **kwargs: Any
+    ) -> List[Article]:
+        """Populate PARAMS/PAYLOAD, then delegate to the new base `search()`."""
+        self.PAYLOAD = {
             "searchKeyword": keyword,
             "page": str(page),
             "size": str(size),
             "type": kwargs.get("type", "story"),
         }
+        return super().search(keyword, page, size, **kwargs)
 
-    def _parse_response(self, json_data: Dict[str, Any]) -> List[Article]:
-        """Translate Hindustan Times JSON payload → list[Article]."""
+    # ------------------------------------------------------------------ #
+    # helpers                                                            #
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _clean_html(raw: str | None) -> str | None:
+        if not raw:
+            return None
+        raw_unescaped: str = html.unescape(raw)
+        text: str = BeautifulSoup(raw_unescaped, "lxml").get_text(" ", strip=True)
+        return re.sub(r"\s+", " ", text).strip() or None
 
+    # ------------------------------------------------------------------ #
+    # unchanged JSON-to-Article parsing                                   #
+    # ------------------------------------------------------------------ #
+    def _parse_response(self, json_data: Dict[str, Any]) -> List[Article]:  # noqa: D401
         raw_list = json_data.get("content") if json_data else []
         if not isinstance(raw_list, list):
             return []
@@ -78,19 +68,18 @@ class HindustanTimesScraper(BaseNewsScraper):
         for item in raw_list:
             meta = item.get("metadata", {})
 
-            # ── lead‑image handling ───────────────────────────────────────
+            # lead image
             media_items: list[MediaItem] = []
             lead_media = item.get("leadMedia") or item.get("image")
             if lead_media and lead_media.get("image"):
                 img_dict = lead_media["image"]["images"]
-                # pick the highest‑res available ("original" key) → fall back to first value
                 url = img_dict.get("original") or next(iter(img_dict.values()), None)
                 if url:
                     media_items.append(
                         MediaItem(url=url, caption=lead_media.get("caption"), type="image")
                     )
 
-            # ── main body paragraphs ─────────────────────────────────────
+            # body paragraphs
             content_body: str | None = None
             if item.get("listElement"):
                 paragraphs_raw = [
@@ -104,33 +93,37 @@ class HindustanTimesScraper(BaseNewsScraper):
                 if paragraphs_clean:
                     content_body = "\n".join(paragraphs_clean)
 
-            # ── summary ──────────────────────────────────────────────────
+            # summary
             summary_raw = item.get("quickReadSummary") or item.get("summary")
             summary_clean = self._clean_html(summary_raw)
 
-            # ── assemble Article dataclass ───────────────────────────────
-            art = Article(
-                title=item.get("title") or item.get("headline"),
-                published_at=item.get("firstPublishedDate"),
-                url=meta.get("canonicalUrl") or meta.get("url") or item.get("url"),
-                content=content_body,
-                summary=summary_clean,
-                author=(meta.get("authors") or meta.get("author") or None),
-                media=media_items,
-                outlet="Hindustan Times",
-                tags=[tag for tag in (meta.get("keywords") or []) if isinstance(tag, str)],
-                section=meta.get("sectionName") or meta.get("section"),
+            # assemble Article
+            articles.append(
+                Article(
+                    title=item.get("title") or item.get("headline"),
+                    published_at=item.get("firstPublishedDate"),
+                    url=meta.get("canonicalUrl") or meta.get("url") or item.get("url"),
+                    content=content_body,
+                    summary=summary_clean,
+                    author=(meta.get("authors") or meta.get("author") or None),
+                    media=media_items,
+                    outlet="Hindustan Times",
+                    tags=[t for t in (meta.get("keywords") or []) if isinstance(t, str)],
+                    section=meta.get("sectionName") or meta.get("section"),
+                )
             )
-            articles.append(art)
         return articles
 
 
 # ───────────────────────────── tiny demo ──────────────────────────────
 if __name__ == "__main__":  # pragma: no cover – manual smoke‑test
     scraper = HindustanTimesScraper()
-    arts = scraper.search("bangladesh", page=1, size=20)
-    for a in arts[:3]:
-        print(a.title)
-        print("Summary:", a.summary)
-        print("Content snippet:", (a.content or "")[:140], "…\n")
-    print("Total:", len(arts))
+    articles = scraper.search("bangladesh", page=1, size=50)
+    for article in articles:
+        print(f"{article.published_at} – {article.outlet} - {article.author} - {article.title}\n"
+              f"{article.url}\n"
+              f"Summary: {article.summary}\n"
+              f"Content: {article.content[:120] if article.content else ''} ...\n"
+              f"{article.media}\n"
+              f"{article.tags} - {article.section}\n")
+    print(f"{len(articles)} articles found")

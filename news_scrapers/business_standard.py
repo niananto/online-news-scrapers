@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Sequence
 from urllib.parse import urljoin
 import html
 import json
-import re
 import logging
+import re
 
 from bs4 import BeautifulSoup  # type: ignore
 
@@ -16,108 +16,95 @@ logger = logging.getLogger(__name__)
 
 
 class BusinessStandardScraper(BaseNewsScraper):
-    """Scraper for **Business‑Standard** search + article pages."""
+    """Scraper for **Business Standard** search + article pages."""
 
-    BASE_URL: str = "https://apibs.business-standard.com/search/"
-    REQUEST_METHOD: str = "GET"  # the base‑class will send GET instead of POST
+    BASE_URL = "https://apibs.business-standard.com/search/"
+    REQUEST_METHOD = "GET"
 
-    DEFAULT_HEADERS: Dict[str, str] = {
+    HEADERS: Dict[str, str] = {
         "accept": "application/json",
         "origin": "https://www.business-standard.com",
         "referer": "https://www.business-standard.com/",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+        "user-agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/138.0.0.0 Safari/537.36"
+        ),
     }
 
-    IMG_PREFIX: str = "https://bsmedia.business-standard.com"  # image_path is relative
-    URL_PREFIX: str = "https://www.business-standard.com"      # article_url is relative
+    IMG_PREFIX = "https://bsmedia.business-standard.com"
+    URL_PREFIX = "https://www.business-standard.com"
 
-    def _build_params(self, *, keyword: str, page: int, size: int, **kwargs: Any) -> Dict[str, Any]:
-        """Return the *query‑string* dictionary for the search request."""
-        return {
+    # ─────────────────── new-style entry-point ───────────────────
+    def search(
+        self, keyword: str, page: int = 1, size: int = 30, **kwargs: Any
+    ) -> List[Article]:
+        self.PARAMS = {
             "type": kwargs.get("type", "news"),
             "limit": str(size),
             "page": str(page),
             "keyword": keyword,
         }
+        self.PAYLOAD = {}  # GET-only
+        return super().search(keyword, page, size, **kwargs)
 
-    def _build_payload(self, *, keyword: str, page: int, size: int, **_kwargs: Any) -> Dict[str, Any]:
-        """Business‑Standard uses *GET* so no request body is necessary."""
-        return {}
-
+    # ─────────────────── response parsing (unchanged) ───────────────────
     def _parse_response(self, json_data: Dict[str, Any]) -> List[Article]:
-        """Translate the search‑API JSON into a list of :class:`Article` objects."""
-        raw_list: Sequence[Dict[str, Any]] = json_data.get("data", {}).get("news", []) if json_data else []
+        raw_list: Sequence[Dict[str, Any]] = (
+            json_data.get("data", {}).get("news", []) if json_data else []
+        )
         if not isinstance(raw_list, list):
             return []
 
         articles: List[Article] = []
         for item in raw_list:
-            # Build canonical URLs
-            url_path: str | None = item.get("article_url")
-            full_url: str | None = urljoin(self.URL_PREFIX, url_path) if url_path else None
+            url_path = item.get("article_url")
+            full_url = urljoin(self.URL_PREFIX, url_path) if url_path else None
 
-            img_path: str | None = item.get("image_path")
-            full_img: str | None = urljoin(self.IMG_PREFIX, img_path) if img_path else None
-            media_items: List[MediaItem] = [MediaItem(url=full_img, caption=None, type="image")] if full_img else []
+            img_path = item.get("image_path")
+            img_url = urljoin(self.IMG_PREFIX, img_path) if img_path else None
+            media = [MediaItem(url=img_url, type="image")] if img_url else []
 
-            # Epoch seconds –> ISO8601 handled by dataclass post‑processing
-            published_raw: int | str | None = item.get("published_date")
+            section = (
+                url_path.split("/", 2)[1]
+                if url_path and url_path.startswith("/") and "/" in url_path[1:]
+                else None
+            )
 
-            # Derive *section* from the first path segment of ``article_url``.
-            section: str | None = None
-            if url_path and url_path.startswith("/"):
-                _, first_segment, *_ = url_path.split("/", 2)  # eg "/companies/news/..." → "companies"
-                section = first_segment or None
-
-            # ── light Article object from search result ──
             art = Article(
                 title=item.get("heading1"),
-                published_at=published_raw,  # type: ignore[arg-type]
+                published_at=item.get("published_date"),
                 url=full_url,
-                content=None,  # hydrated below
                 summary=item.get("sub_heading"),
-                author=None,
-                media=media_items,
+                media=media,
                 outlet="Business Standard",
-                tags=[],
                 section=section,
             )
 
-            # ── hydrate with details from the article HTML ──
-            if full_url:
+            if full_url:  # hydrate from article page
                 try:
-                    details = self._fetch_article_details(full_url)
-                except Exception:  # pragma: no cover – do *not* abort entire scrape
-                    logger.exception("Failed to hydrate %s", full_url)
-                    details = {}
+                    detail = self._fetch_article_details(full_url)
+                except Exception:  # pragma: no cover
+                    logger.exception("hydrate failed for %s", full_url)
+                    detail = {}
 
-                if details:
-                    # The dataclass is *not* frozen → we can assign freely.
-                    art.author = details.get("author") or art.author
-                    art.content = details.get("content") or art.content
-                    art.tags = details.get("tags", art.tags)
-                    art.published_at = details.get("published_at") or art.published_at
-                    # Merge any extra media discovered inside the article body
-                    extra_media: List[MediaItem] = details.get("media", [])
-                    art.media.extend(m for m in extra_media if m.url not in {mi.url for mi in art.media})
+                art.author = detail.get("author") or art.author
+                art.content = detail.get("content") or art.content
+                art.tags = detail.get("tags", art.tags)
+                art.published_at = detail.get("published_at") or art.published_at
+                extra = detail.get("media", [])
+                art.media.extend(m for m in extra if m.url not in {x.url for x in art.media})
 
             articles.append(art)
         return articles
 
-    # ───────────────────────────── helper: article HTML ─────────────────────────
+    # ─────────────────── detail helpers (headers updated) ───────────────────
     def _fetch_article_details(self, url: str) -> Dict[str, Any]:
-        """GET the article page and extract richer metadata.
-
-        Preference order:
-        1. Embedded *NewsArticle* JSON‑LD (Schema.org).
-        2. DOM fall‑backs for author, body, and tags.
-        """
-        resp = self.session.get(url, headers=self.DEFAULT_HEADERS, timeout=20)
+        resp = self.session.get(url, headers=self.HEADERS, timeout=20)
         resp.raise_for_status()
-
         soup = BeautifulSoup(resp.text, "lxml")
 
-        details: Dict[str, Any] = {
+        detail = {
             "author": None,
             "content": None,
             "tags": [],
@@ -125,15 +112,11 @@ class BusinessStandardScraper(BaseNewsScraper):
             "media": [],
         }
 
-        # ── 1) JSON‑LD (preferred) ────────────────────────────────────────────
-        json_ld_block = self._find_newsarticle_ldjson(soup)
-        if json_ld_block:
-            details.update(json_ld_block)
-        else:
-            # ── 2) Fallback to DOM parsing ────────────────────────────────────
-            self._fallback_dom_parse(soup, details)
-
-        return details
+        ld = self._find_newsarticle_ldjson(soup)
+        if ld:
+            detail.update(ld)
+        self._fallback_dom_parse(soup, detail)
+        return detail
 
     # ──────────────────────────── JSON‑LD parsing ──────────────────────────────
     @staticmethod
@@ -227,17 +210,13 @@ class BusinessStandardScraper(BaseNewsScraper):
 
 # ────────────────────────────── tiny demo ───────────────────────────────
 if __name__ == "__main__":
-    import itertools as _it
-
     scraper = BusinessStandardScraper()
     articles = scraper.search("bangladesh", page=1, size=50)
-    for art in _it.islice(articles, 5):
-        print("\n==>", art.title)
-        print("URL:", art.url)
-        print("Date:", art.published_at)
-        print("Author:", art.author)
-        print("Tags:", art.tags)
-        print("Media:", art.media[:2])
-        if art.content:
-            print("Content snippet:", art.content[:150], "…")
-    print(f"Total fetched: {len(articles)}")
+    for article in articles:
+        print(f"{article.published_at} – {article.outlet} - {article.author} - {article.title}\n"
+              f"{article.url}\n"
+              f"Summary: {article.summary}\n"
+              f"Content: {article.content[:120] if article.content else ''} ...\n"
+              f"{article.media}\n"
+              f"{article.tags} - {article.section}\n")
+    print(f"{len(articles)} articles found")
