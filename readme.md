@@ -1,13 +1,18 @@
 # Online News Scrapers – FastAPI Gateway
 
-A minimal **FastAPI** service that spawns individual news‑site scrapers on demand and returns a clean JSON feed.\
+A minimal **FastAPI** service that spawns individual news‑site scrapers on demand and returns a clean JSON feed.
 Out‑of‑the‑box it supports:
 
-- Hindustan Times (`hindustan_times`)
-- Business Standard (`business_standard`)
-- News18 (`news18`)
-- Firstpost (`firstpost`)
-- Republic World (`republic_world`)
+* Hindustan Times (`hindustan_times`)
+* Business Standard (`business_standard`)
+* News18 (`news18`)
+* Firstpost (`firstpost`)
+* Republic World (`republic_world`)
+* India.com (`india_dotcom`)
+* The Statesman (`statesman`)
+* Daily Pioneer (`daily_pioneer`)
+* South Asia Monitor (`south_asia_monitor`)
+* The Economic Times (`economic_times`)
 
 > **Note**: Each request targets **one** outlet.  Aggregating across outlets should be handled by the upstream orchestrator.
 
@@ -59,12 +64,12 @@ FastAPI’s interactive docs are available at [**http://localhost:8000/**](http:
 
 ### 3.1 Request body (JSON)
 
-| Field       | Type          | Default        | Notes                                                                                   |
-| ----------- | ------------- | -------------- | --------------------------------------------------------------------------------------- |
-| `outlet`    | `string`      | **required**   | One of `hindustan_times`, `business_standard`, `news18`, `firstpost`, `republic_world`. |
-| `keyword`   | `string`      | `"bangladesh"` | Search / topic keyword.                                                                 |
-| `limit`     | `int (1‒500)` | `30`           | Max articles to return.                                                                 |
-| `page_size` | `int (1‒100)` | `50`           | Batch size per remote request.                                                          |
+| Field       | Type          | Default        | Notes                                                                                                                                                                         |
+| ----------- | ------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `outlet`    | `string`      | **required**   | One of `hindustan_times`, `business_standard`, `news18`, `firstpost`, `republic_world`, `india_dotcom`, `statesman`, `daily_pioneer`, `south_asia_monitor`, `economic_times`. |
+| `keyword`   | `string`      | `"bangladesh"` | Search / topic keyword.                                                                                                                                                       |
+| `limit`     | `int (1‒500)` | `30`           | Max articles to return.                                                                                                                                                       |
+| `page_size` | `int (1‒100)` | `50`           | Batch size per remote request.                                                                                                                                                |
 
 ### 3.2 Successful response (`200 OK`)
 
@@ -140,11 +145,11 @@ http POST :8000/scrape outlet=republic_world keyword=bangladesh limit:=10 page_s
 
 ## 6. Troubleshooting & tips
 
-| Issue                                             | Suggestion                                                                                          |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| *Validation error for **`author`** / **`section`* | The model accepts both strings and lists. Ensure the scraper returns one of those types.            |
-| *Address already in use*                          | Another process is bound to port 8000. Choose a different port: `uvicorn server:app --port 8080`.   |
-| *SSL / proxy errors while scraping*               | Check outbound network access or corporate proxy settings; each scraper uses `requests` underneath. |
+| Issue                                               | Suggestion                                                                                          |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| \*Validation error for **`author`** / \**`section`* | The model accepts both strings and lists. Ensure the scraper returns one of those types.            |
+| *Address already in use*                            | Another process is bound to port 8000. Choose a different port: `uvicorn server:app --port 8080`.   |
+| *SSL / proxy errors while scraping*                 | Check outbound network access or corporate proxy settings; each scraper uses `requests` underneath. |
 
 ---
 
