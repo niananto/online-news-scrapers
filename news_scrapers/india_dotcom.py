@@ -2,22 +2,24 @@ from __future__ import annotations
 
 """IndiaDotComScraper – search + article hydration for *India.com*.
 
-This scraper follows **BaseNewsScraper** conventions and mirrors the coding
-style of our other outlets (Business Standard, News18, etc.).  India.com has
-*no* JSON API, so we work entirely with HTML:
+Updated for the **BaseNewsScraper v2** interface which uses class attributes
+(`PARAMS`, `PAYLOAD`, …) instead of the old *_build_* helpers and relies on
+`RESPONSE_KIND` to determine whether the remote endpoint returns JSON or HTML.
 
-* **Search** pages – `https://www.india.com/topic/<keyword>/page/<page>/` –
+India.com exposes **no JSON API**, so the scraper works entirely with HTML:
+
+* **Search** pages – ``https://www.india.com/topic/<keyword>/page/<page>/`` –
   show 32 tiles on page‑1 but only the last **24** are real news articles
   (the first eight are *Photo/Video* widgets).  Downstream pages show 24 news
   cards each.
 * **Article** pages embed a *NewsArticle* JSON‑LD block, plus traditional DOM
   markup that we use as a fallback.
 
-The scraper guarantees **non‑empty** `content`, `tags`, and `section` for
-_every_ returned :class:`news_scrapers.base.Article`.
+The scraper guarantees **non‑empty** ``content``, ``tags``, and ``section`` for
+*every* returned :class:`news_scrapers.base.Article`.
 """
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 import datetime as _dt
 import json
@@ -26,7 +28,7 @@ import re
 
 from bs4 import BeautifulSoup  # type: ignore – BeautifulSoup4
 
-from news_scrapers.base import Article, BaseNewsScraper, MediaItem
+from news_scrapers.base import Article, BaseNewsScraper, MediaItem, ResponseKind
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +50,12 @@ class IndiaDotComScraper(BaseNewsScraper):
     """Full‑fledged scraper for *India.com* (search + hydrate)."""
 
     REQUEST_METHOD: str = "GET"
+    RESPONSE_KIND: ResponseKind = ResponseKind.HTML  # search returns raw HTML
 
     # Filled in dynamically inside *search* – must not be None for base class.
     BASE_URL: str = "https://www.india.com/"
 
-    DEFAULT_HEADERS: Dict[str, str] = {
+    HEADERS: Dict[str, str] = {
         "accept": (
             "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
         ),
@@ -71,7 +74,7 @@ class IndiaDotComScraper(BaseNewsScraper):
         keyword: str,
         page: int = 1,
         size: int = 50,
-        **kwargs,
+        **kwargs: Any,
     ) -> List[Article]:
         """Return up to **24** hydrated articles for *keyword* and *page*."""
 
@@ -83,30 +86,22 @@ class IndiaDotComScraper(BaseNewsScraper):
             )
             size = _MAX_PER_PAGE
 
+        # Dynamically point *BASE_URL* at the search/topic page and let the
+        # new base‑class machinery do the HTTP + error handling.
         original_base = self.BASE_URL
         self.BASE_URL = f"https://www.india.com/topic/{keyword}/page/{page}/"
+
+        # No query‑string or JSON body for this endpoint.
+        self.PARAMS = {}
+        self.PAYLOAD = {}
+
         try:
-            arts = super().search(keyword=keyword, page=page, size=size, **kwargs)
+            articles = super().search(keyword, page, size, **kwargs)
         finally:
-            self.BASE_URL = original_base
-        return arts
+            self.BASE_URL = original_base  # restore for any subsequent calls
+        return articles
 
-    # ─────────────────────── base‑class plumbing overrides ──────────────────
-    def _build_params(self, *, keyword: str, page: int, size: int, **kwargs):
-        return {}
-
-    def _build_payload(self, *, keyword: str, page: int, size: int, **kwargs):
-        return {}
-
-    def _fetch_json(self, url: str, _params, _payload):  # noqa: D401 – HTML not JSON
-        logger.info("GET %s", url)
-        resp = self.session.get(
-            url, headers=self.DEFAULT_HEADERS, timeout=self.timeout, proxies=self.proxies
-        )
-        resp.raise_for_status()
-        return resp.text  # HTML string
-
-    # ─────────────────────── parse listing + hydrate ────────────────────────
+    # ───────────────────── parse listing + hydrate ────────────────────────
     def _parse_response(self, html: str):
         soup = BeautifulSoup(html, "lxml")
         listing = self._parse_listing(soup)
@@ -123,7 +118,7 @@ class IndiaDotComScraper(BaseNewsScraper):
             boxes = boxes[8:]  # drop photo/video tiles
 
         arts: List[Article] = []
-        for box in boxes[:_MAX_PER_PAGE]:
+        for box in boxes[: _MAX_PER_PAGE]:
             art = Article(outlet="India.com")
 
             # title + url
@@ -135,7 +130,9 @@ class IndiaDotComScraper(BaseNewsScraper):
             if (img := box.select_one("div.photo img")):
                 src = img.get("data-src") or img.get("src")
                 if src and not _PLACEHOLDER_IMG.search(src):
-                    art.media.append(MediaItem(url=src, caption=img.get("alt"), type="image"))
+                    art.media.append(
+                        MediaItem(url=src, caption=img.get("alt"), type="image")
+                    )
 
             # author + date + teaser
             if (meta := box.select_one(".published-by")):
@@ -143,14 +140,16 @@ class IndiaDotComScraper(BaseNewsScraper):
                 if (a2 := meta.find("a")):
                     art.author = a2.get_text(strip=True)
                 if m := _DATE_RE.search(raw_meta):
-                    dt = _dt.datetime.strptime(m.group(1), "%B %d, %Y %I:%M %p").replace(tzinfo=_TZ_IST)
+                    dt = _dt.datetime.strptime(m.group(1), "%B %d, %Y %I:%M %p").replace(
+                        tzinfo=_TZ_IST
+                    )
                     art.published_at = dt.isoformat()
                 if (p := meta.find_next("p")):
                     teaser = p.get_text(" ", strip=True)
                     if teaser and not _looks_like_author_date(teaser):
                         art.summary = teaser
 
-            # section from listing URL path (e.g., /business/, /sports/ …)
+            # section from listing URL path (e.g. /business/, /sports/ …)
             if art.url:
                 art.section = _section_from_url(art.url)
 
@@ -162,7 +161,7 @@ class IndiaDotComScraper(BaseNewsScraper):
         if not art.url:
             return
         resp = self.session.get(
-            art.url, headers=self.DEFAULT_HEADERS, timeout=self.timeout, proxies=self.proxies
+            art.url, headers=self.HEADERS, timeout=self.timeout, proxies=self.proxies
         )
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
@@ -178,7 +177,7 @@ class IndiaDotComScraper(BaseNewsScraper):
 
     # ───────────────────────── JSON‑LD helpers ──────────────────────────────
     @staticmethod
-    def _extract_from_jsonld(soup: BeautifulSoup) -> Dict[str, any] | None:
+    def _extract_from_jsonld(soup: BeautifulSoup) -> Dict[str, Any] | None:  # type: ignore[override]
         script = soup.find("script", type="application/ld+json", string=re.compile("NewsArticle"))
         if not script or not script.string:
             return None
@@ -204,7 +203,7 @@ class IndiaDotComScraper(BaseNewsScraper):
 
         # keywords may be list | str (comma / pipe separated)
         tags: List[str] = []
-        if (kw := data.get("keywords")):
+        if kw := data.get("keywords"):
             if isinstance(kw, list):
                 tags = [str(t).strip() for t in kw if str(t).strip()]
             elif isinstance(kw, str):
@@ -218,9 +217,13 @@ class IndiaDotComScraper(BaseNewsScraper):
             case list(lst):
                 imgs.extend(lst)
             case dict(d):
-                if (u := d.get("url")):
+                if u := d.get("url"):
                     imgs.append(u)
-        media = [MediaItem(url=u, caption=None, type="image") for u in imgs if u and not _PLACEHOLDER_IMG.search(u)]
+        media = [
+            MediaItem(url=u, caption=None, type="image")
+            for u in imgs
+            if u and not _PLACEHOLDER_IMG.search(u)
+        ]
 
         body = data.get("articleBody") or ""
         section = data.get("articleSection") or None
@@ -238,7 +241,9 @@ class IndiaDotComScraper(BaseNewsScraper):
     def _fallback_dom_parse(self, soup: BeautifulSoup, art: Article):
         # Content
         if not art.content:
-            cont = soup.select_one("div[itemprop='articleBody'], div.article-details, section.article-details")
+            cont = soup.select_one(
+                "div[itemprop='articleBody'], div.article-details, section.article-details"
+            )
             if cont:
                 texts = [p.get_text(" ", strip=True) for p in cont.find_all("p") if p.get_text(strip=True)]
                 art.content = _strip_breadcrumbs("\n".join(texts))
@@ -250,12 +255,12 @@ class IndiaDotComScraper(BaseNewsScraper):
 
         # Author
         if not art.author:
-            if (a := soup.select_one("[itemprop='author']")):
+            if a := soup.select_one("[itemprop='author']"):
                 art.author = a.get_text(strip=True)
 
         # Section (breadcrumb / nav highlight)
         if not art.section:
-            if (crumb := soup.select_one("ul.bread_crumb li a:nth-of-type(2)")):
+            if crumb := soup.select_one("ul.bread_crumb li a:nth-of-type(2)"):
                 art.section = crumb.get_text(strip=True)
 
         # Hero image (fallback)
@@ -284,7 +289,7 @@ def _section_from_url(url: str) -> Optional[str]:
         return None
 
 
-def _merge_into_article(art: Article, data: Dict[str, any]):
+def _merge_into_article(art: Article, data: Dict[str, Any]):
     if data.get("author"):
         art.author = art.author or data["author"]
     if data.get("content"):
@@ -303,12 +308,13 @@ def _merge_into_article(art: Article, data: Dict[str, any]):
 
 # ─────────────────────────────── demo ────────────────────────────────
 if __name__ == "__main__":  # pragma: no cover
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
-
-    s = IndiaDotComScraper()
-    a = s.search("bangladesh", page=1)
-    for art in a[:5]:
-        print("==>", art.title)
-        print("section:", art.section, "| tags:", art.tags[:5])
-        print("content snippet:", art.content[:120], "…\n")
-    print("Total:", len(a))
+    scraper = IndiaDotComScraper()
+    articles = scraper.search("bangladesh", page=1, size=50)
+    for article in articles:
+        print(f"{article.published_at} – {article.outlet} - {article.author} - {article.title}\n"
+              f"{article.url}\n"
+              f"Summary: {article.summary}\n"
+              f"Content: {article.content[:120] if article.content else ''} ...\n"
+              f"{article.media}\n"
+              f"{article.tags} - {article.section}\n")
+    print(f"{len(articles)} articles found")
