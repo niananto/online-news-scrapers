@@ -59,6 +59,7 @@ from news_scrapers import (
     News18Scraper,
     FirstpostScraper,
     RepublicWorldScraper,
+    IndiaDotComScraper,
 )
 from news_scrapers.base import Article  # for type hints only
 
@@ -68,6 +69,7 @@ SCRAPER_MAP = {
     "news18": News18Scraper,
     "firstpost": FirstpostScraper,
     "republic_world": RepublicWorldScraper,
+    "india_dotcom": IndiaDotComScraper,
 }
 OUTLET_CHOICES: set[str] = set(SCRAPER_MAP.keys())
 
