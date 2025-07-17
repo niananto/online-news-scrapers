@@ -73,6 +73,7 @@ from news_scrapers import (
     TimesOfIndiaScraper,
     DeccanHeraldScraper,
     AbpLiveScraper,
+    TheQuintScraper,
 )
 from news_scrapers.base import Article  # for type hints only
 
@@ -95,6 +96,7 @@ SCRAPER_MAP = {
     "times_of_india": TimesOfIndiaScraper,
     "deccan_herald": DeccanHeraldScraper,
     "abp_live": AbpLiveScraper,
+    "the_quint": TheQuintScraper,
 }
 OUTLET_CHOICES: set[str] = set(SCRAPER_MAP.keys())
 
