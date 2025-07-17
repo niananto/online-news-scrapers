@@ -96,7 +96,7 @@ class SouthAsiaMonitorScraper(BaseNewsScraper):
         The remote site uses **0‑based** pagination – we translate transparently.
         """
         if size > 16:
-            logger.warning("The Statesman returns max 16 results per page – truncating from %s",size)
+            logger.warning("South Asia Monitor returns max 16 results per page – truncating from %s",size)
             size = 16
 
         remote_page = max(page - 1, 0)  # SAM expects *?page=0* for the 1st page
