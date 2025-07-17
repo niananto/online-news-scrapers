@@ -11,6 +11,7 @@ from .south_asia_monitor import SouthAsiaMonitorScraper
 from .economic_times import EconomicTimesScraper
 from .india_today import IndiaTodayScraper
 from .ndtv import NdtvScraper
+from .the_tribune import TheTribuneScraper
 
 __all__ = [
     "BaseNewsScraper",
@@ -26,4 +27,5 @@ __all__ = [
     "EconomicTimesScraper",
     "IndiaTodayScraper",
     "NdtvScraper",
+    "TheTribuneScraper",
 ]
