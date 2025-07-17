@@ -66,6 +66,7 @@ from news_scrapers import (
     SouthAsiaMonitorScraper,
     EconomicTimesScraper,
     IndiaTodayScraper,
+    NdtvScraper,
 )
 from news_scrapers.base import Article  # for type hints only
 
@@ -81,6 +82,7 @@ SCRAPER_MAP = {
     "south_asia_monitor": SouthAsiaMonitorScraper,
     "economic_times": EconomicTimesScraper,
     "india_today": IndiaTodayScraper,
+    "ndtv": NdtvScraper,
 }
 OUTLET_CHOICES: set[str] = set(SCRAPER_MAP.keys())
 
