@@ -16,6 +16,7 @@ from .indian_express import IndianExpressScraper
 from .millennium_post import MillenniumPostScraper
 from .times_of_india import TimesOfIndiaScraper
 from .deccan_herald import DeccanHeraldScraper
+from .abp_live import AbpLiveScraper
 
 __all__ = [
     "BaseNewsScraper",
@@ -36,4 +37,5 @@ __all__ = [
     "MillenniumPostScraper",
     "TimesOfIndiaScraper",
     "DeccanHeraldScraper",
+    "AbpLiveScraper",
 ]
