@@ -59,13 +59,11 @@ class IndianExpressScraper(BaseNewsScraper):
             print("Indian Express returns max 10 results per page – truncating from %s",size)
             size = 10
 
-        # TODO: currently always returns results for bangladesh
-        #  We need to figure out how to get the tag_id for a given keyword.
         self.PAYLOAD = {
             "action": "load_tag_data",
             "tag_security": "4021c11242",
             "tag_page": page,
-            "tag_id": "442185855",  # This is for "bangladesh"
+            "tag_id": self._get_tag_id_from_keyword(keyword) or "442185855",  # This is for "bangladesh"
             "post_type": "article",
             "utm_source": "",
             "profile_temp": "",
@@ -86,6 +84,74 @@ class IndianExpressScraper(BaseNewsScraper):
         if resp.status_code >= 400:
             raise Exception(f"HTTP error {resp.status_code}: {resp.text}")
         return resp.text
+
+    def _get_tag_id_from_keyword(self, keyword: str) -> str | None:
+        """Fetches the tag ID for a given keyword from the Indian Express website."""
+        tag_url = f"https://indianexpress.com/about/{keyword}/"
+        try:
+            resp = self.session.get(
+                tag_url,
+                headers=self.HEADERS,
+                cookies=self.COOKIES,
+                timeout=self.timeout,
+                proxies=self.proxies,
+            )
+            resp.raise_for_status() # Raise HTTPError for bad responses
+
+            link_header = resp.headers.get('Link')
+            if link_header:
+                # Regex to find the tag ID in the Link header
+                match = re.search(r'wp/v2/tags/(\d+)', link_header)
+                if match:
+                    return match.group(1)
+        except Exception as e:
+            print(f"ERROR: Error fetching tag ID for '{keyword}': {e}")
+        return None
+
+    def _fetch_article_details(self, article: Article) -> None:
+        """Fetch and parse the full article content."""
+        if not article.url:
+            return
+
+        resp = self.session.get(
+            article.url,
+            headers=self.HEADERS,
+            cookies=self.COOKIES,
+            timeout=self.timeout,
+            proxies=self.proxies,
+        )
+        if resp.status_code >= 400:
+            # Log the error, but don't raise an exception to allow other articles to be processed
+            print(f"ERROR: Failed to fetch article {article.url}: {resp.status_code}")
+            return
+
+        soup = BeautifulSoup(resp.text, "lxml")
+
+        # Extract content
+        content_div = soup.find("div", id="pcl-full-content")
+        if content_div:
+            article.content = self._clean_html(str(content_div))
+
+        # Extract author
+        author_element = soup.find("div", class_="editor-date-logo")
+        if author_element:
+            author_link = author_element.find("a")
+            if author_link:
+                article.author = author_link.get_text(strip=True)
+
+        # Extract tags
+        tags_div = soup.find("div", class_="storytags")
+        if tags_div:
+            tags = [a.get_text(strip=True) for a in tags_div.find_all("a")]
+            article.tags = tags
+
+        # Extract section (from breadcrumb)
+        breadcrumb = soup.find("ol", class_="m-breadcrumb")
+        if breadcrumb:
+            # Get the last but one list item, which is usually the section
+            section_element = breadcrumb.find_all("li")
+            if len(section_element) >= 2:
+                article.section = section_element[-2].get_text(strip=True)
 
     @staticmethod
     def _clean_html(raw: str | None) -> str | None:
@@ -117,28 +183,36 @@ class IndianExpressScraper(BaseNewsScraper):
             if image_url:
                 media_items.append(MediaItem(url=image_url, type="image"))
 
-            articles.append(
-                Article(
-                    title=title,
-                    published_at=published_at,
-                    url=url,
-                    summary=summary,
-                    media=media_items,
-                    outlet="The Indian Express",
-                )
+            article = Article(
+                title=title,
+                published_at=published_at,
+                url=url,
+                summary=summary,
+                media=media_items,
+                outlet="The Indian Express",
             )
+            self._fetch_article_details(article) # Hydrate the article
+            articles.append(article)
         return articles
 
 
 # ───────────────────────────── tiny demo ──────────────────────────────
 if __name__ == "__main__":  # pragma: no cover – manual smoke‑test
     scraper = IndianExpressScraper()
-    articles = scraper.search("bangladesh", page=2, size=50)
+    articles = scraper.search("bangladesh", page=1, size=10)
     for article in articles:
         print(f"{article.published_at} – {article.outlet} - {article.title}")
-        print(f"  {article.url}")
+        print(f"  URL: {article.url}")
         if article.summary:
             print(f"  Summary: {article.summary[:100]}...")
+        if article.content:
+            print(f"  Content: {article.content[:500]}...")
+        if article.author:
+            print(f"  Author: {article.author}")
+        if article.tags:
+            print(f"  Tags: {', '.join(article.tags)}")
+        if article.section:
+            print(f"  Section: {article.section}")
         if article.media:
             print(f"  Media: {article.media[0].url}")
     print(f"\n{len(articles)} articles found")
