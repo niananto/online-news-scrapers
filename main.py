@@ -18,10 +18,11 @@ from news_scrapers import (BaseNewsScraper,
                            DeccanHeraldScraper,
                            AbpLiveScraper,
                            TheQuintScraper,
-                           TheGuardianScraper,)
+                           TheGuardianScraper,
+                           WashingtonPostScraper,)
 
-scraper: BaseNewsScraper = TheGuardianScraper()
-articles = scraper.search("bangladesh", page=2, size=50)
+scraper: BaseNewsScraper = WashingtonPostScraper()
+articles = scraper.search("bangladesh", page=1, size=50)
 for article in articles:
     print(f"{article.published_at} – {article.outlet} - {article.author} - {article.title}\n"
           f"{article.url}\n"

@@ -75,6 +75,7 @@ from news_scrapers import (
     AbpLiveScraper,
     TheQuintScraper,
     TheGuardianScraper,
+    WashingtonPostScraper,
 )
 from news_scrapers.base import Article  # for type hints only
 
@@ -99,6 +100,7 @@ SCRAPER_MAP = {
     "abp_live": AbpLiveScraper,
     "the_quint": TheQuintScraper,
     "the_guardian": TheGuardianScraper,
+    "washington_post": WashingtonPostScraper,
 }
 OUTLET_CHOICES: set[str] = set(SCRAPER_MAP.keys())
 

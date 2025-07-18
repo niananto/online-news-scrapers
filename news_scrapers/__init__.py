@@ -19,6 +19,7 @@ from .deccan_herald import DeccanHeraldScraper
 from .abp_live import AbpLiveScraper
 from .the_quint import TheQuintScraper
 from .the_guardian import TheGuardianScraper
+from .washington_post import WashingtonPostScraper
 
 __all__ = [
     "BaseNewsScraper",
@@ -42,4 +43,5 @@ __all__ = [
     "AbpLiveScraper",
     "TheQuintScraper",
     "TheGuardianScraper",
+    "WashingtonPostScraper",
 ]
