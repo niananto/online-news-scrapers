@@ -66,6 +66,16 @@ from news_scrapers import (
     SouthAsiaMonitorScraper,
     EconomicTimesScraper,
     IndiaTodayScraper,
+    NdtvScraper,
+    TheTribuneScraper,
+    IndianExpressScraper,
+    MillenniumPostScraper,
+    TimesOfIndiaScraper,
+    DeccanHeraldScraper,
+    AbpLiveScraper,
+    TheQuintScraper,
+    TheGuardianScraper,
+    WashingtonPostScraper,
 )
 from news_scrapers.base import Article  # for type hints only
 
@@ -81,6 +91,16 @@ SCRAPER_MAP = {
     "south_asia_monitor": SouthAsiaMonitorScraper,
     "economic_times": EconomicTimesScraper,
     "india_today": IndiaTodayScraper,
+    "ndtv": NdtvScraper,
+    "the_tribune": TheTribuneScraper,
+    "indian_express": IndianExpressScraper,
+    "millennium_post": MillenniumPostScraper,
+    "times_of_india": TimesOfIndiaScraper,
+    "deccan_herald": DeccanHeraldScraper,
+    "abp_live": AbpLiveScraper,
+    "the_quint": TheQuintScraper,
+    "the_guardian": TheGuardianScraper,
+    "washington_post": WashingtonPostScraper,
 }
 OUTLET_CHOICES: set[str] = set(SCRAPER_MAP.keys())
 

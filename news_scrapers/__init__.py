@@ -10,6 +10,16 @@ from .daily_pioneer import DailyPioneerScraper
 from .south_asia_monitor import SouthAsiaMonitorScraper
 from .economic_times import EconomicTimesScraper
 from .india_today import IndiaTodayScraper
+from .ndtv import NdtvScraper
+from .the_tribune import TheTribuneScraper
+from .indian_express import IndianExpressScraper
+from .millennium_post import MillenniumPostScraper
+from .times_of_india import TimesOfIndiaScraper
+from .deccan_herald import DeccanHeraldScraper
+from .abp_live import AbpLiveScraper
+from .the_quint import TheQuintScraper
+from .the_guardian import TheGuardianScraper
+from .washington_post import WashingtonPostScraper
 
 __all__ = [
     "BaseNewsScraper",
@@ -24,4 +34,14 @@ __all__ = [
     "SouthAsiaMonitorScraper",
     "EconomicTimesScraper",
     "IndiaTodayScraper",
+    "NdtvScraper",
+    "TheTribuneScraper",
+    "IndianExpressScraper",
+    "MillenniumPostScraper",
+    "TimesOfIndiaScraper",
+    "DeccanHeraldScraper",
+    "AbpLiveScraper",
+    "TheQuintScraper",
+    "TheGuardianScraper",
+    "WashingtonPostScraper",
 ]
