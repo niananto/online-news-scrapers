@@ -25,6 +25,7 @@ from .wion import WionScraper
 from .telegraph_india import TelegraphIndiaScraper
 from .the_hindu import TheHinduScraper
 from .bbc import BBCScraper
+from .cnn import CNNScraper
 
 __all__ = [
     "BaseNewsScraper",
@@ -54,4 +55,5 @@ __all__ = [
     "TelegraphIndiaScraper",
     "TheHinduScraper",
     "BBCScraper",
+    "CNNScraper",
 ]

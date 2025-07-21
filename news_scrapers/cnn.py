@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
+import re
 from news_scrapers.base import Article, BaseNewsScraper, MediaItem, ResponseKind, logger
 
 load_dotenv()
@@ -74,13 +75,63 @@ class CNNScraper(BaseNewsScraper):
                 outlet="CNN",
                 media=media_items,
                 author=None, # Author not available in search results
+                content=None,
             )
+
+            if article.url:
+                try:
+                    details = self._fetch_article_details(article.url)
+                    article.content = details.get("content")
+                    article.author = details.get("author")
+                except Exception as e:
+                    logger.warning(f"Failed to hydrate article {article.url}: {e}")
+
             articles.append(article)
         return articles
 
     def _fetch_article_details(self, url: str) -> Dict[str, Any]:
-        """CNN search API provides enough details, no need for separate article fetching."""
-        return {}
+        """Fetch and parse the full article content based on URL."""
+        headers = self.HEADERS
+        resp = self.session.get(url, headers=headers, timeout=self.timeout, proxies=self.proxies)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        details: Dict[str, Any] = {"content": None, "author": None}
+
+        # Extract content from JSON-LD
+        for ld_json_script in soup.find_all("script", attrs={'type': 'application/ld+json'}):
+            if ld_json_script.string:
+                try:
+                    ld_data = json.loads(ld_json_script.string)[0]
+                    if ld_data.get("@type") == "NewsArticle" and ld_data.get("articleBody"):
+                        details["content"] = ld_data["articleBody"]
+                        break
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+
+        # Extract author from various script tags
+        for script_tag in soup.find_all("script"):
+            if script_tag.string:
+                js_content = script_tag.string
+                # Attempt to extract author from window.CNN.contentModel.author
+                match = re.search(r"author:\s*'([^']+)'", js_content)
+                if match:
+                    details["author"] = match.group(1)
+                    break
+                # Attempt to extract from window.CNN.omniture.cap_author
+                match = re.search(r"cap_author:\s*'([^']+)'", js_content)
+                if match:
+                    details["author"] = match.group(1)
+                    break
+                # Attempt to extract from window.CNN.metadata.content.author (handles multiple authors)
+                match = re.search(r"""author":\[([^\]]+)\]""", js_content)
+                if match:
+                    authors_str = match.group(1)
+                    authors = [author.strip().strip('"') for author in authors_str.split(',')]
+                    details["author"] = ", ".join(authors)
+                    break
+
+        return details
 
 
 if __name__ == "__main__":
