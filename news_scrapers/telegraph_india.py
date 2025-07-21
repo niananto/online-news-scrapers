@@ -82,9 +82,19 @@ class TelegraphIndiaScraper(BaseNewsScraper):
     def _fetch_article_details(self, url: str) -> Dict[str, Any]:
         """Fetch and parse the full article content."""
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'en-US,en;q=0.9',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'accept-language': 'en-US,en;q=0.9',
+            'cache-control': 'no-cache',
+            'pragma': 'no-cache',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'none',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
         }
         resp = self.session.get(url, headers=headers, timeout=self.timeout, proxies=self.proxies)
         resp.raise_for_status()
@@ -96,18 +106,26 @@ class TelegraphIndiaScraper(BaseNewsScraper):
             "published_at": None,
         }
 
-        # Extract from meta tags
-        if author_meta := soup.find("meta", attrs={"name": "author"}):
-            details["author"] = author_meta.get("content")
-        if pub_date_meta := soup.find("meta", attrs={"property": "article:published_time"}):
-            details["published_at"] = pub_date_meta.get("content")
+        # Extract from JSON-LD script tag
+        ld_json_script = soup.find("script", type="application/ld+json")
+        if ld_json_script:
+            try:
+                ld_json_data = json.loads(ld_json_script.string)
+                if isinstance(ld_json_data, list):
+                    ld_json_data = ld_json_data[0]
+                if ld_json_data.get("@type") == "NewsArticle":
+                    details["author"] = ld_json_data.get("author", {}).get("name")
+                    details["published_at"] = ld_json_data.get("datePublished")
+            except (json.JSONDecodeError, IndexError):
+                logger.warning(f"Could not parse JSON-LD for {url}")
 
         # Extract content
-        if content_div := soup.find("div", class_="fs-17px-story-body"):
-            # Remove share-bar from content
-            if share_bar := content_div.find("div", class_="share-bar-container"):
-                share_bar.decompose()
-            details["content"] = content_div.get_text(separator=" ", strip=True)
+        if content_article := soup.find("article", id="contentbox"):
+            paragraphs = content_article.find_all("p")
+            # Exclude the last paragraph if it's the syndicated feed notice
+            if paragraphs and "not been edited by The Telegraph Online staff" in paragraphs[-1].get_text():
+                paragraphs = paragraphs[:-1]
+            details["content"] = " ".join(p.get_text(strip=True) for p in paragraphs)
 
         return details
 
