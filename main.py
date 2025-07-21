@@ -20,9 +20,10 @@ from news_scrapers import (BaseNewsScraper,
                            TheQuintScraper,
                            TheGuardianScraper,
                            WashingtonPostScraper,
-                           TheDiplomatScraper,)
+                           TheDiplomatScraper,
+                           WionScraper,)
 
-scraper: BaseNewsScraper = TheDiplomatScraper()
+scraper: BaseNewsScraper = WionScraper()
 articles = scraper.search("bangladesh", page=1, size=50)
 for article in articles:
     print(f"{article.published_at} – {article.outlet} - {article.author} - {article.title}\n"

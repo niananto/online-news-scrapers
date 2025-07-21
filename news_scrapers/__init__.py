@@ -21,6 +21,7 @@ from .the_quint import TheQuintScraper
 from .the_guardian import TheGuardianScraper
 from .washington_post import WashingtonPostScraper
 from .the_diplomat import TheDiplomatScraper
+from .wion import WionScraper
 
 __all__ = [
     "BaseNewsScraper",
@@ -46,4 +47,5 @@ __all__ = [
     "TheGuardianScraper",
     "WashingtonPostScraper",
     "TheDiplomatScraper",
+    "WionScraper",
 ]
