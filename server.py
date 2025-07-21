@@ -79,6 +79,7 @@ from news_scrapers import (
     WionScraper,
     TelegraphIndiaScraper,
     TheHinduScraper,
+    BBCScraper,
 )
 from news_scrapers.base import Article  # for type hints only
 
@@ -107,6 +108,7 @@ SCRAPER_MAP = {
     "wion": WionScraper,
     "telegraph_india": TelegraphIndiaScraper,
     "the_hindu": TheHinduScraper,
+    "bbc": BBCScraper,
 }
 OUTLET_CHOICES: set[str] = set(SCRAPER_MAP.keys())
 
