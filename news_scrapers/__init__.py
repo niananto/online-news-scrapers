@@ -23,6 +23,7 @@ from .washington_post import WashingtonPostScraper
 from .the_diplomat import TheDiplomatScraper
 from .wion import WionScraper
 from .telegraph_india import TelegraphIndiaScraper
+from .the_hindu import TheHinduScraper
 
 __all__ = [
     "BaseNewsScraper",
@@ -50,4 +51,5 @@ __all__ = [
     "TheDiplomatScraper",
     "WionScraper",
     "TelegraphIndiaScraper",
+    "TheHinduScraper",
 ]

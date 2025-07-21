@@ -5,6 +5,7 @@ import os
 import json
 from typing import Any, Dict, List
 
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 from news_scrapers.base import Article, BaseNewsScraper, MediaItem, ResponseKind, logger
@@ -68,16 +69,45 @@ class TheHinduScraper(BaseNewsScraper):
                         if news_keywords := meta.get("news_keywords"):
                             article.tags = [tag.strip() for tag in news_keywords.split(',')]
 
-            # Placeholder for fetching full article details
-            # if article.url:
-            #     try:
-            #         details = self._fetch_article_details(article.url)
-            #         article.content = details.get("content")
-            #     except Exception as e:
-            #         logger.warning(f"Failed to hydrate article {article.url}: {e}")
+            if article.url:
+                try:
+                    details = self._fetch_article_details(article.url)
+                    article.content = details.get("content")
+                except Exception as e:
+                    logger.warning(f"Failed to hydrate article {article.url}: {e}")
 
             articles.append(article)
         return articles
+
+    def _fetch_article_details(self, url: str) -> Dict[str, Any]:
+        """Fetch and parse the full article content."""
+        headers = {
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'accept-language': 'en-US,en;q=0.9',
+            'cache-control': 'no-cache',
+            'pragma': 'no-cache',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'none',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+        }
+        resp = self.session.get(url, headers=headers, timeout=self.timeout, proxies=self.proxies)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        details: Dict[str, Any] = {
+            "content": None,
+        }
+
+        if content_div := soup.find("div", {"id": lambda x: x and x.startswith('content-body-')}):
+            details["content"] = content_div.get_text(separator=" ", strip=True)
+
+        return details
 
 
 if __name__ == "__main__":
@@ -90,6 +120,7 @@ if __name__ == "__main__":
             print(f"  Author: {art.author}")
             print(f"  Published At: {art.published_at}")
             print(f"  Summary: {art.summary}")
+            print(f"  Content: {(art.content or '')[:200]}...")
             if art.media:
                 print(f"  Media: {art.media[0].url}")
             print("-" * 20)
