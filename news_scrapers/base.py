@@ -94,12 +94,11 @@ class BaseNewsScraper(ABC):
         session: Optional[requests.Session] = None,
         timeout: int | tuple[int, int] = (5, 15),   # (connect, read)
         proxy: str | None = None,
-        browser: Any = None,                        # Selenium/WebDriver etc.
     ) -> None:
         self.session = session or _build_session()
         self.timeout = timeout
         self.proxies = {"http": proxy, "https": proxy} if proxy else None
-        self._browser = browser                    # optional – not used by default
+        self._driver: Any = None # Initialize driver to None
 
     # ───────────────────── public entry-point ──────────────────────
     def search(self, keyword: str, page: int = 1, size: int = 30, **kwargs) -> List[Article]:
@@ -125,7 +124,7 @@ class BaseNewsScraper(ABC):
         """Fetch the search endpoint and return *json* or *html* accordingly."""
 
         # Browser automation shortcut
-        if self.USE_BROWSER and self._browser is not None:
+        if self.USE_BROWSER and self._driver is not None:
             return self._fetch_via_browser(url, self.PARAMS)
 
         method = self.REQUEST_METHOD.upper()
@@ -162,9 +161,30 @@ class BaseNewsScraper(ABC):
 
     # Browser helper – override/extend for Selenium/Playwright
     def _fetch_via_browser(self, url: str, params: Dict[str, Any]) -> str:  # noqa: D401
-        raise NotImplementedError(
-            "Set USE_BROWSER=False or override _fetch_via_browser() in the scraper."
-        )
+        if self.USE_BROWSER and not self._driver:
+            self._init_browser()
+
+        self._driver.get(url)
+        return self._driver.page_source
+
+    def _init_browser(self):
+        """Initialize the browser driver."""
+        if self._driver is None:
+            import undetected_chromedriver as uc
+            self._driver = uc.Chrome()
+
+    def quit_browser(self):
+        """Quit the browser driver if it's active."""
+        if self._driver:
+            try:
+                self._driver.quit()
+            except Exception as e:
+                logger.debug(f"Exception during browser quit: {e}")
+            finally:
+                self._driver = None
+
+    def __del__(self):
+        self.quit_browser()
 
     # ------------------------------------------------------------------
     @staticmethod
