@@ -20,6 +20,10 @@ from dataclasses import asdict
 from typing import List, Optional, Dict, Any
 import datetime
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field, field_validator
@@ -50,6 +54,11 @@ from news_scrapers import (
     TheQuintScraper,
     TheGuardianScraper,
     WashingtonPostScraper,
+    WionScraper,
+    TelegraphIndiaScraper,
+    TheHinduScraper,
+    BBCScraper,
+    CNNScraper,
 )
 from news_scrapers.base import Article
 from database_service import DatabaseService
@@ -84,6 +93,11 @@ SCRAPER_MAP = {
     "the_quint": TheQuintScraper,
     "the_guardian": TheGuardianScraper,
     "washington_post": WashingtonPostScraper,
+    "wion": WionScraper,
+    "telegraph_india": TelegraphIndiaScraper,
+    "the_hindu": TheHinduScraper,
+    "bbc": BBCScraper,
+    "cnn": CNNScraper,
 }
 OUTLET_CHOICES: set[str] = set(SCRAPER_MAP.keys())
 
@@ -123,7 +137,12 @@ SCHEDULER_CONFIG = {
         'abp_live',
         'the_quint',
         'the_guardian',
-        'washington_post'
+        'washington_post',
+        'wion',
+        'telegraph_india',
+        'the_hindu',
+        'bbc',
+        'cnn'
     ],
     'keyword': 'bangladesh',
     'limit': 5,
