@@ -2,3 +2,10 @@
 .idea
 playground
 .env
+
+# Folders to ignore
+dump_image/
+chat-memory/
+
+# Files to ignore
+scheduler config and end points.md
