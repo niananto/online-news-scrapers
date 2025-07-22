@@ -66,7 +66,7 @@ class DeccanHeraldScraper(BaseNewsScraper):
 
         for item in items:
             title = item.get("headline")
-            url = f"https://www.deccanherald.com/{item.get("slug")}"
+            url = f"https://www.deccanherald.com/{item.get('slug')}"
             summary = item.get("subheadline")
             published_at = item.get("published-at")
             if published_at:
@@ -80,7 +80,7 @@ class DeccanHeraldScraper(BaseNewsScraper):
             # Extract image
             image_url = None
             if item.get("hero-image-s3-key"):
-                image_url = f"https://media.assettype.com/{item.get("hero-image-s3-key")}"
+                image_url = f"https://media.assettype.com/{item.get('hero-image-s3-key')}"
 
             media_items = []
             if image_url:

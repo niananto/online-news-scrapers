@@ -40,10 +40,15 @@ def create_content_items_table():
         shares_count_text TEXT,
         comments_count_text TEXT,
         views_count_text TEXT,
+        platform VARCHAR(100),
+
         search_vector TSVECTOR,
         
         -- Foreign key constraint
-        CONSTRAINT fk_content_items_source_id FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE
+        CONSTRAINT fk_content_items_source_id FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE,
+        
+        -- Unique constraint for URL
+        CONSTRAINT uk_content_items_url UNIQUE (url)
     );
     """
     
@@ -55,6 +60,7 @@ def create_content_items_table():
         "CREATE INDEX IF NOT EXISTS idx_content_items_content_type ON content_items(content_type);",
         "CREATE INDEX IF NOT EXISTS idx_content_items_language ON content_items(language);",
         "CREATE INDEX IF NOT EXISTS idx_content_items_processing_status ON content_items(processing_status);",
+        "CREATE INDEX IF NOT EXISTS idx_content_items_platform ON content_items(platform);",
         
         # Time-based indexes
         "CREATE INDEX IF NOT EXISTS idx_content_items_ingested_at ON content_items(ingested_at DESC);",
@@ -70,7 +76,7 @@ def create_content_items_table():
         "CREATE INDEX IF NOT EXISTS idx_content_items_raw_data ON content_items USING gin(raw_data);",
         
         # URL and author indexes
-        "CREATE INDEX IF NOT EXISTS idx_content_items_url ON content_items(url) WHERE url IS NOT NULL;",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_content_items_url_unique ON content_items(url) WHERE url IS NOT NULL;",
         "CREATE INDEX IF NOT EXISTS idx_content_items_author_name ON content_items(author_name) WHERE author_name IS NOT NULL;",
         "CREATE INDEX IF NOT EXISTS idx_content_items_author_handle ON content_items(author_handle) WHERE author_handle IS NOT NULL;",
         

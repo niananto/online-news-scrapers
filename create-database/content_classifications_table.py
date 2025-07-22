@@ -90,8 +90,8 @@ def create_content_classifications_table():
         "CREATE INDEX IF NOT EXISTS idx_content_classifications_original_classification ON content_classifications USING gin(original_classification);",
         
         # New analysis indexes
-        "CREATE INDEX IF NOT EXISTS idx_content_classifications_new_analysis_credibility ON content_classifications(new_analysis_credibility);",
-        "CREATE INDEX IF NOT EXISTS idx_content_classifications_new_analysis_misinformation ON content_classifications(new_analysis_misinformation);"
+        "CREATE INDEX IF NOT EXISTS idx_content_classifications_new_analysis_credibility ON content_classifications(new_analysis_credibility_score);",
+        "CREATE INDEX IF NOT EXISTS idx_content_classifications_new_analysis_misinformation ON content_classifications(new_analysis_misinformation_risk);"
     ]
     
     # SQL to create trigger function for reviewed_at
@@ -144,50 +144,50 @@ def create_content_classifications_table():
         print("Content_classifications table created successfully!")
         
         # Insert sample data
-        print("Inserting sample data...")
-        sample_data_sql = """
-        INSERT INTO content_classifications (
-            content_id, 
-            ai_metadata, 
-            ai_response, 
-            primary_topic, 
-            topic_confidence,
-            content_classification,
-            classification_confidence,
-            sentiment,
-            sentiment_confidence,
-            urgency_level,
-            urgency_confidence,
-            political_bias,
-            bias_confidence,
-            credibility,
-            manually_reviewed,
-            original_classification
-        ) 
-        SELECT 
-            id as content_id,
-            'Sample AI metadata for testing' as ai_metadata,
-            '{"analysis": "sample", "confidence": 0.85}'::jsonb as ai_response,
-            'Politics' as primary_topic,
-            0.90 as topic_confidence,
-            'News Article' as content_classification,
-            0.85 as classification_confidence,
-            'Neutral' as sentiment,
-            0.75 as sentiment_confidence,
-            'Medium' as urgency_level,
-            0.80 as urgency_confidence,
-            'Center' as political_bias,
-            0.70 as bias_confidence,
-            7.5 as credibility,
-            false as manually_reviewed,
-            '{"original": "sample_classification"}'::jsonb as original_classification
-        FROM content_items 
-        LIMIT 3
-        ON CONFLICT DO NOTHING;
-        """
-        cursor.execute(sample_data_sql)
-        conn.commit()
-        print("Sample data inserted successfully!")
+        # print("Inserting sample data...")
+        # sample_data_sql = """
+        # INSERT INTO content_classifications (
+        #     content_id, 
+        #     ai_metadata, 
+        #     ai_response, 
+        #     primary_topic, 
+        #     topic_confidence,
+        #     content_classification,
+        #     classification_confidence,
+        #     sentiment,
+        #     sentiment_confidence,
+        #     urgency_level,
+        #     urgency_confidence,
+        #     political_bias,
+        #     bias_confidence,
+        #     credibility,
+        #     manually_reviewed,
+        #     original_classification
+        # ) 
+        # SELECT 
+        #     id as content_id,
+        #     'Sample AI metadata for testing' as ai_metadata,
+        #     '{"analysis": "sample", "confidence": 0.85}'::jsonb as ai_response,
+        #     'Politics' as primary_topic,
+        #     0.90 as topic_confidence,
+        #     'News Article' as content_classification,
+        #     0.85 as classification_confidence,
+        #     'Neutral' as sentiment,
+        #     0.75 as sentiment_confidence,
+        #     'Medium' as urgency_level,
+        #     0.80 as urgency_confidence,
+        #     'Center' as political_bias,
+        #     0.70 as bias_confidence,
+        #     7.5 as credibility,
+        #     false as manually_reviewed,
+        #     '{"original": "sample_classification"}'::jsonb as original_classification
+        # FROM content_items 
+        # LIMIT 3
+        # ON CONFLICT DO NOTHING;
+        # """
+        # cursor.execute(sample_data_sql)
+        # conn.commit()
+        # print("Sample data inserted successfully!")
         
         # Show table summary
         print("\n" + "="*50)

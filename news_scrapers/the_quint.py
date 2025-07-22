@@ -83,7 +83,7 @@ class TheQuintScraper(BaseNewsScraper):
             
             image_url = None
             if item.get("hero-image-s3-key"):
-                image_url = f"https://media.assettype.com/{item.get("hero-image-s3-key")}"
+                image_url = f"https://media.assettype.com/{item.get('hero-image-s3-key')}"
 
             media_items = []
             if image_url:
@@ -160,7 +160,7 @@ class TheQuintScraper(BaseNewsScraper):
                 article.section = story_data["sections"][0].get("name")
 
             if story_data.get("hero-image-s3-key"):
-                article.media = [MediaItem(url=f"https://media.assettype.com/{story_data["hero-image-s3-key"]}", type="image")]
+                article.media = [MediaItem(url=f"https://media.assettype.com/{story_data['hero-image-s3-key']}", type="image")]
 
         except json.JSONDecodeError as e:
             print(f"Error parsing article JSON for {article.url}: {e}")
