@@ -27,6 +27,7 @@ from .the_hindu import TheHinduScraper
 from .bbc import BBCScraper
 from .cnn import CNNScraper
 from .reuters import ReutersScraper
+from .aljazeera import AljazeeraScraper
 
 __all__ = [
     "BaseNewsScraper",
@@ -58,4 +59,5 @@ __all__ = [
     "BBCScraper",
     "CNNScraper",
     "ReutersScraper",
+    "AljazeeraScraper",
 ]

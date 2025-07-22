@@ -1,20 +1,15 @@
 import json
-import re
 import time
-from datetime import datetime
 from typing import Any, Dict, List
-from urllib.parse import urlparse, urlencode
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import requests
 
 from news_scrapers.base import Article, BaseNewsScraper, MediaItem, ResponseKind, logger
-
-load_dotenv()
 
 
 class AljazeeraScraper(BaseNewsScraper):
@@ -40,9 +35,31 @@ class AljazeeraScraper(BaseNewsScraper):
             size = 10
 
         data = self._fetch_remote(self.BASE_URL, keyword=keyword, page=page, size=size)
-        articles = self._parse_response(data, page=page, size=size)
+        articles = self._parse_response(data)
 
-        return articles
+        # Slice the articles to return only the ones for the requested page
+        start_index = (page - 1) * size
+        end_index = start_index + size
+
+        # Hydrate articles
+        for article in articles[start_index:end_index]:
+            if article.url:
+                try:
+                    details = self._fetch_article_details(article.url)
+                    article.content = details.get("content")
+                    article.author = details.get("author")
+                    article.tags = details.get("tags")
+                    article.section = details.get("section")
+                    # Update published_at if a more precise one is found during hydration
+                    if details.get("published_at"):
+                        article.published_at = details.get("published_at")
+                    # Replace media list if a better one is found
+                    if details.get("media"):
+                        article.media = details.get("media")
+                except Exception as e:
+                    logger.warning(f"Failed to hydrate article {article.url}: {e}")
+
+        return articles[start_index:end_index]
 
     def _fetch_remote(self, url: str, **kwargs) -> str:
         """Fetch the search endpoint using the browser and handle pagination."""
@@ -93,7 +110,7 @@ class AljazeeraScraper(BaseNewsScraper):
 
         return self._driver.page_source
 
-    def _parse_response(self, html_data: str, page: int, size: int) -> List[Article]:
+    def _parse_response(self, html_data: str) -> List[Article]:
         """Convert the HTML response into a list of `Article` objects."""
         soup = BeautifulSoup(html_data, "lxml")
         all_articles: List[Article] = []
@@ -128,29 +145,7 @@ class AljazeeraScraper(BaseNewsScraper):
             )
             all_articles.append(article)
 
-        # Slice the articles to return only the ones for the requested page
-        start_index = (page - 1) * size
-        end_index = start_index + size
-        
-        # Hydrate articles
-        for article in all_articles[start_index:end_index]:
-            if article.url:
-                try:
-                    details = self._fetch_article_details(article.url)
-                    article.content = details.get("content")
-                    article.author = details.get("author")
-                    article.tags = details.get("tags")
-                    article.section = details.get("section")
-                    # Update published_at if a more precise one is found during hydration
-                    if details.get("published_at"):
-                        article.published_at = details.get("published_at")
-                    # Replace media list if a better one is found
-                    if details.get("media"):
-                        article.media = details.get("media")
-                except Exception as e:
-                    logger.warning(f"Failed to hydrate article {article.url}: {e}")
-
-        return all_articles[start_index:end_index]
+        return all_articles
 
     def _fetch_article_details(self, url: str) -> Dict[str, Any]:
         """Fetch and parse the full article content and author from GraphQL API."""
@@ -225,11 +220,11 @@ class AljazeeraScraper(BaseNewsScraper):
                 published_at = date_data
 
             if featured_image := article_data.get("featuredImage"):
-                if image_url := featured_image.get("url"):
-                    media.append(MediaItem(url=image_url, type='image'))
+                if image_url := featured_image.get("sourceUrl"):
+                    media.append(MediaItem(url=f"https://www.aljazeera.com{image_url}", type='image', caption=featured_image.get("caption")))
 
             if tags_data := article_data.get("tags"):
-                tags = [tag.get("name") for tag in tags_data if tag.get("name")]
+                tags = [tag.get("title") for tag in tags_data if tag.get("title")]
 
             if taxonomies := article_data.get("taxonomies"):
                 if topics := taxonomies.get("topics"):
