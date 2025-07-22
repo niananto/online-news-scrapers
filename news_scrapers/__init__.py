@@ -20,6 +20,12 @@ from .abp_live import AbpLiveScraper
 from .the_quint import TheQuintScraper
 from .the_guardian import TheGuardianScraper
 from .washington_post import WashingtonPostScraper
+from .the_diplomat import TheDiplomatScraper
+from .wion import WionScraper
+from .telegraph_india import TelegraphIndiaScraper
+from .the_hindu import TheHinduScraper
+from .bbc import BBCScraper
+from .cnn import CNNScraper
 
 __all__ = [
     "BaseNewsScraper",
@@ -44,4 +50,10 @@ __all__ = [
     "TheQuintScraper",
     "TheGuardianScraper",
     "WashingtonPostScraper",
+    "TheDiplomatScraper",
+    "WionScraper",
+    "TelegraphIndiaScraper",
+    "TheHinduScraper",
+    "BBCScraper",
+    "CNNScraper",
 ]
