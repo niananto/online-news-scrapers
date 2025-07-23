@@ -17,6 +17,7 @@ class NewYorkTimesScraper(BaseNewsScraper):
     GRAPHQL_URL = "https://samizdat-graphql.nytimes.com/graphql/v2"
     REQUEST_METHOD = "GET"
     RESPONSE_KIND = ResponseKind.HTML
+    USE_BROWSER = True
 
     # This is the hardcoded SHA256 hash for the persisted query
     PERSISTED_QUERY_HASH = "2f5041641b9de748b42e5732e25b735d26f0ae188c900e15029287f391427ddf"
@@ -184,10 +185,21 @@ class NewYorkTimesScraper(BaseNewsScraper):
 
     def _parse_response(self, response: Any) -> List[Article]:
         if isinstance(response, str):  # HTML response for page 1
-            return self._parse_html_response(response)
+            articles = self._parse_html_response(response)
         elif isinstance(response, dict):  # JSON response for page > 1
-            return self._parse_json_response(response)
-        return []
+            articles = self._parse_json_response(response)
+        else:
+            return []
+
+        for article in articles:
+            self._init_browser()
+            details = self._fetch_article_details(article.url)
+            if details:
+                logger.info(f"Successfully fetched article {article.url}.")
+                article.content = details["content"]
+                article.media.extend(details["media"])
+                article.author = details["author"] or article.author
+        return articles
 
     @staticmethod
     def _parse_html_response(html_data: str) -> List[Article]:
@@ -203,8 +215,6 @@ class NewYorkTimesScraper(BaseNewsScraper):
         json_string = re.sub(r'function\(.*?\)\{.*?\},', '"",', json_string)
         try:
             preloaded_data = json.loads(json_string + '}')
-            with open("preloaded_data.json", "w") as preloaded_file:
-                json.dump(preloaded_data, preloaded_file)
         except json.JSONDecodeError as e:
             print(f"JSON decode error: {e}")
             return []
@@ -219,15 +229,7 @@ class NewYorkTimesScraper(BaseNewsScraper):
 
                 # Attempt to extract URL from the ID if available
                 article_id = value.get("id")
-                url = None
-                if article_id:
-                    try:
-                        decoded_id = base64.b64decode(article_id).decode('utf-8')
-                        if "nyt://article/" in decoded_id:
-                            uuid = decoded_id.split("/")[-1]
-                            url = f"https://www.nytimes.com/article/{uuid}"
-                    except Exception as e:
-                        print(f"Could not decode article ID {article_id}: {e}")
+                url = value.get("url")
 
                 # Extract author (if available in this structure)
                 author = None
@@ -242,7 +244,8 @@ class NewYorkTimesScraper(BaseNewsScraper):
                     if first_crop.get("renditions"):
                         first_rendition = first_crop["renditions"][0]
                         if first_rendition.get("url"):
-                            media_items.append(MediaItem(url=first_rendition["url"], type="image"))
+                            media_items.append(MediaItem(url=first_rendition["url"], type="image",
+                                                         caption=promotional_media.get("caption").get("text"),))
 
                 articles.append(
                     Article(
@@ -269,24 +272,6 @@ class NewYorkTimesScraper(BaseNewsScraper):
 
             title = node.get("creativeWorkHeadline", {}).get("default")
             published_at = node.get("firstPublished")
-            # Construct URL from ID
-            # article_id = node.get("id")
-            # url = None
-            # if article_id:
-            #     # The ID is like "QXJ0aWNsZTpueXQ6Ly9hcnRpY2xlLz..." which is base64 encoded.
-            #     # Decoding it gives something like "Article:nyt://article/..."
-            #     try:
-            #         decoded_id = base64.b64decode(article_id).decode('utf-8')
-            #         if "nyt://article/" in decoded_id:
-            #             # Extract the UUID part and construct the URL
-            #             uuid = decoded_id.split("/")[-1]
-            #             # This is a simplified URL construction. A more robust solution might need to fetch the actual article page to get the canonical URL.
-            #             # For now, we'll use a placeholder or try to construct a search-friendly URL if possible.
-            #             # Given the context, a direct article URL is not immediately available from the search JSON.
-            #             # Let's use a generic NYT article URL structure if the UUID is present.
-            #             url = f"https://www.nytimes.com/article/{uuid}"
-            #     except Exception as e:
-            #         logger.warning(f"Could not decode article ID {article_id}: {e}")
             url = node.get("url")
             summary = node.get("creativeWorkSummary")
             author = None
@@ -324,6 +309,54 @@ class NewYorkTimesScraper(BaseNewsScraper):
         return articles
 
 
+    def _fetch_article_details(self, url: str) -> dict:
+        html_content = self._fetch_via_browser(url, {})
+        soup = BeautifulSoup(html_content, "lxml")
+
+        out = {
+            "title": None,
+            "author": None,
+            "content": None,
+            "published_at": None,
+            "media": [],
+        }
+
+        # # Extract Title (from meta tag or title tag)
+        # title_meta = soup.find("meta", attrs={"property": "og:title"})
+        # if title_meta:
+        #     out["title"] = title_meta.get("content")
+        # else:
+        #     title_tag = soup.find("title")
+        #     if title_tag:
+        #         out["title"] = title_tag.get_text(strip=True).replace(" - The New York Times", "")
+
+        # Extract Author
+        author_meta = soup.find("meta", attrs={"name": "byl"})
+        if author_meta:
+            out["author"] = author_meta.get("content", "").replace("By ", "")
+
+        # Extract Published Date
+        published_meta = soup.find("meta", attrs={"property": "article:published_time"})
+        if published_meta:
+            out["published_at"] = published_meta.get("content")
+
+        # Extract Content
+        article_body = soup.find("section", attrs={"name": "articleBody"})
+        if article_body:
+            paragraphs = article_body.find_all("p")
+            out["content"] = "\n".join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+
+        # Extract Media (main image)
+        main_image_meta = soup.find("meta", attrs={"property": "og:image"})
+        if main_image_meta:
+            img_url = main_image_meta.get("content")
+            img_alt = soup.find("meta", attrs={"property": "og:image:alt"})
+            caption = img_alt.get("content") if img_alt else None
+            if img_url:
+                out["media"].append(MediaItem(url=img_url, caption=caption, type="image"))
+        return out
+
+
 if __name__ == "__main__":
     scraper = NewYorkTimesScraper()
     for page_no in range(1, 4):
@@ -334,8 +367,8 @@ if __name__ == "__main__":
             print(f"Summary: {art.summary}")
             print(f"Author: {art.author}")
             print(f"Published at: {art.published_at}")
-            print(f"Summary at: {art.summary}")
             print(f"Section: {art.section}")
             print(f"Tags: {art.tags}")
             print(f"Content: {art.content}")
+            print(f"Media: {art.media}")
             print("----------------------------------------------------------")

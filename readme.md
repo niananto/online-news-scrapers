@@ -31,6 +31,7 @@ Out‑of‑the‑box it supports:
 * The Tribune (`the_tribune`)
 * Times of India (`times_of_india`)
 * Washington Post (`washington_post`)
+* New York Times (`new_york_times`)
 * Wion (`wion`)
 
 > **Note**: Each request targets **one** outlet.  Aggregating across outlets should be handled by the upstream orchestrator.
@@ -85,7 +86,7 @@ FastAPI’s interactive docs are available at [**http://localhost:8000/**](http:
 
 | Field       | Type          | Default        | Notes                                                                                                                                                                         |
 | ----------- | ------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `outlet`    | `string`      | **required**   | One of `abp_live`, `aljazeera`, `bbc`, `business_standard`, `cnn`, `daily_pioneer`, `deccan_herald`, `economic_times`, `firstpost`, `hindustan_times`, `india_dotcom`, `india_today`, `indian_express`, `millennium_post`, `ndtv`, `news18`, `republic_world`, `reuters`, `south_asia_monitor`, `statesman`, `telegraph_india`, `the_guardian`, `the_hindu`, `the_quint`, `the_tribune`, `times_of_india`, `washington_post`, `wion`. |
+| `outlet`    | `string`      | **required**   | One of `abp_live`, `aljazeera`, `bbc`, `business_standard`, `cnn`, `daily_pioneer`, `deccan_herald`, `economic_times`, `firstpost`, `hindustan_times`, `india_dotcom`, `india_today`, `indian_express`, `millennium_post`, `ndtv`, `news18`, `new_york_times`, `republic_world`, `reuters`, `south_asia_monitor`, `statesman`, `telegraph_india`, `the_guardian`, `the_hindu`, `the_quint`, `the_tribune`, `times_of_india`, `washington_post`, `wion`. |
 | `keyword`   | `string`      | `"bangladesh"` | Search / topic keyword.                                                                                                                                                       |
 | `limit`     | `int (1‒500)` | `30`           | Max articles to return.                                                                                                                                                       |
 | `page_size` | `int (1‒100)` | `50`           | Batch size per remote request.                                                                                                                                                |
