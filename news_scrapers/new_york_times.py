@@ -174,11 +174,10 @@ class NewYorkTimesScraper(BaseNewsScraper):
             if next_cursor:
                 self._cursor = next_cursor
                 logger.info(f"Updated cursor for next page: {self._cursor}")
-                return [Article(title=f"Dummy Article from page {page}")]
             else:
                 logger.info("No more pages. End of results.")
                 self._cursor = None
-                return []
+            return self._parse_response(response_data)
         else:
             logger.error(f"Failed to fetch page {page} for keyword '{keyword}'.")
             return []
@@ -190,7 +189,8 @@ class NewYorkTimesScraper(BaseNewsScraper):
             return self._parse_json_response(response)
         return []
 
-    def _parse_html_response(self, html_data: str) -> List[Article]:
+    @staticmethod
+    def _parse_html_response(html_data: str) -> List[Article]:
         articles: List[Article] = []
         soup = BeautifulSoup(html_data, "lxml")
 
@@ -257,7 +257,8 @@ class NewYorkTimesScraper(BaseNewsScraper):
                 )
         return articles
 
-    def _parse_json_response(self, json_data: Dict) -> List[Article]:
+    @staticmethod
+    def _parse_json_response(json_data: Dict) -> List[Article]:
         articles: List[Article] = []
         hits = json_data.get("data", {}).get("search", {}).get("hits", {}).get("edges", [])
 
@@ -269,24 +270,24 @@ class NewYorkTimesScraper(BaseNewsScraper):
             title = node.get("creativeWorkHeadline", {}).get("default")
             published_at = node.get("firstPublished")
             # Construct URL from ID
-            article_id = node.get("id")
-            url = None
-            if article_id:
-                # The ID is like "QXJ0aWNsZTpueXQ6Ly9hcnRpY2xlLz..." which is base64 encoded.
-                # Decoding it gives something like "Article:nyt://article/..."
-                try:
-                    decoded_id = base64.b64decode(article_id).decode('utf-8')
-                    if "nyt://article/" in decoded_id:
-                        # Extract the UUID part and construct the URL
-                        uuid = decoded_id.split("/")[-1]
-                        # This is a simplified URL construction. A more robust solution might need to fetch the actual article page to get the canonical URL.
-                        # For now, we'll use a placeholder or try to construct a search-friendly URL if possible.
-                        # Given the context, a direct article URL is not immediately available from the search JSON.
-                        # Let's use a generic NYT article URL structure if the UUID is present.
-                        url = f"https://www.nytimes.com/article/{uuid}"
-                except Exception as e:
-                    logger.warning(f"Could not decode article ID {article_id}: {e}")
-
+            # article_id = node.get("id")
+            # url = None
+            # if article_id:
+            #     # The ID is like "QXJ0aWNsZTpueXQ6Ly9hcnRpY2xlLz..." which is base64 encoded.
+            #     # Decoding it gives something like "Article:nyt://article/..."
+            #     try:
+            #         decoded_id = base64.b64decode(article_id).decode('utf-8')
+            #         if "nyt://article/" in decoded_id:
+            #             # Extract the UUID part and construct the URL
+            #             uuid = decoded_id.split("/")[-1]
+            #             # This is a simplified URL construction. A more robust solution might need to fetch the actual article page to get the canonical URL.
+            #             # For now, we'll use a placeholder or try to construct a search-friendly URL if possible.
+            #             # Given the context, a direct article URL is not immediately available from the search JSON.
+            #             # Let's use a generic NYT article URL structure if the UUID is present.
+            #             url = f"https://www.nytimes.com/article/{uuid}"
+            #     except Exception as e:
+            #         logger.warning(f"Could not decode article ID {article_id}: {e}")
+            url = node.get("url")
             summary = node.get("creativeWorkSummary")
             author = None
             bylines = node.get("bylines")
@@ -301,9 +302,10 @@ class NewYorkTimesScraper(BaseNewsScraper):
                 if first_crop.get("renditions"):
                     first_rendition = first_crop["renditions"][0]
                     if first_rendition.get("url"):
-                        media_items.append(MediaItem(url=first_rendition["url"], type="image"))
+                        media_items.append(MediaItem(url=first_rendition["url"], type="image",
+                                                     caption=promotional_media.get("caption").get("text")))
 
-            section = node.get("section")
+            section = node.get("section").get("displayName")
             tags = [] # Tags are not directly available in this JSON structure
 
             articles.append(
@@ -324,7 +326,7 @@ class NewYorkTimesScraper(BaseNewsScraper):
 
 if __name__ == "__main__":
     scraper = NewYorkTimesScraper()
-    for page_no in range(1, 2):
+    for page_no in range(1, 4):
         arts = scraper.search("bangladesh", page=page_no, size=50)
         for art in arts:
             print(f"Title: {art.title}")
