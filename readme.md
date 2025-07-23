@@ -3,16 +3,35 @@
 A minimal **FastAPI** service that spawns individual news‑site scrapers on demand and returns a clean JSON feed.
 Out‑of‑the‑box it supports:
 
-* Hindustan Times (`hindustan_times`)
+* Abp Live (`abp_live`)
+* Aljazeera (`aljazeera`)
+* BBC (`bbc`)
 * Business Standard (`business_standard`)
-* News18 (`news18`)
-* Firstpost (`firstpost`)
-* Republic World (`republic_world`)
-* India.com (`india_dotcom`)
-* The Statesman (`statesman`)
+* CNN (`cnn`)
 * Daily Pioneer (`daily_pioneer`)
+* Deccan Herald (`deccan_herald`)
+* Economic Times (`economic_times`)
+* Firstpost (`firstpost`)
+* Hindustan Times (`hindustan_times`)
+* India.com (`india_dotcom`)
+* India Today (`india_today`)
+* Indian Express (`indian_express`)
+* Millennium Post (`millennium_post`)
+* NDTV (`ndtv`)
+* News18 (`news18`)
+* Republic World (`republic_world`)
+* Reuters (`reuters`)
 * South Asia Monitor (`south_asia_monitor`)
-* The Economic Times (`economic_times`)
+* Statesman (`statesman`)
+* Telegraph India (`telegraph_india`)
+* The Diplomat (`the_diplomat`)
+* The Guardian (`the_guardian`)
+* The Hindu (`the_hindu`)
+* The Quint (`the_quint`)
+* The Tribune (`the_tribune`)
+* Times of India (`times_of_india`)
+* Washington Post (`washington_post`)
+* Wion (`wion`)
 
 > **Note**: Each request targets **one** outlet.  Aggregating across outlets should be handled by the upstream orchestrator.
 
@@ -66,7 +85,7 @@ FastAPI’s interactive docs are available at [**http://localhost:8000/**](http:
 
 | Field       | Type          | Default        | Notes                                                                                                                                                                         |
 | ----------- | ------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `outlet`    | `string`      | **required**   | One of `hindustan_times`, `business_standard`, `news18`, `firstpost`, `republic_world`, `india_dotcom`, `statesman`, `daily_pioneer`, `south_asia_monitor`, `economic_times`. |
+| `outlet`    | `string`      | **required**   | One of `abp_live`, `aljazeera`, `bbc`, `business_standard`, `cnn`, `daily_pioneer`, `deccan_herald`, `economic_times`, `firstpost`, `hindustan_times`, `india_dotcom`, `india_today`, `indian_express`, `millennium_post`, `ndtv`, `news18`, `republic_world`, `reuters`, `south_asia_monitor`, `statesman`, `telegraph_india`, `the_guardian`, `the_hindu`, `the_quint`, `the_tribune`, `times_of_india`, `washington_post`, `wion`. |
 | `keyword`   | `string`      | `"bangladesh"` | Search / topic keyword.                                                                                                                                                       |
 | `limit`     | `int (1‒500)` | `30`           | Max articles to return.                                                                                                                                                       |
 | `page_size` | `int (1‒100)` | `50`           | Batch size per remote request.                                                                                                                                                |
