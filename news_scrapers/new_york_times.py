@@ -165,6 +165,7 @@ class NewYorkTimesScraper(BaseNewsScraper):
             "extensions": json.dumps(extensions),
         }
 
+        self.quit_browser()
         response_data = self._fetch_remote(self.GRAPHQL_URL)
 
         if response_data and isinstance(response_data, dict):
@@ -192,7 +193,6 @@ class NewYorkTimesScraper(BaseNewsScraper):
             return []
 
         for article in articles:
-            self._init_browser()
             details = self._fetch_article_details(article.url)
             if details:
                 logger.info(f"Successfully fetched article {article.url}.")
@@ -360,6 +360,7 @@ class NewYorkTimesScraper(BaseNewsScraper):
 if __name__ == "__main__":
     scraper = NewYorkTimesScraper()
     for page_no in range(1, 4):
+        print(f"-----Fetching page {page_no}------------------")
         arts = scraper.search("bangladesh", page=page_no, size=50)
         for art in arts:
             print(f"Title: {art.title}")
