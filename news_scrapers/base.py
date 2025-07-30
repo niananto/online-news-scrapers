@@ -1,19 +1,23 @@
-# base.py – v2  (2025-07-09)
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
+import requests
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
-
-import requests
+from typing import Any, Dict, List, Optional, Union
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
+from selenium import webdriver
+
+typeWebDriver = Union[webdriver.Firefox,
+                      webdriver.Chrome,
+                      webdriver.Edge,
+                      webdriver.Safari,
+                      ]
 
 # ─────────────────────────── data models ────────────────────────────
 @dataclass(slots=True)
@@ -98,7 +102,7 @@ class BaseNewsScraper(ABC):
         self.session = session or _build_session()
         self.timeout = timeout
         self.proxies = {"http": proxy, "https": proxy} if proxy else None
-        self._driver: Any = None # Initialize driver to None
+        self._driver: typeWebDriver | None = None # Initialize driver to None
 
     # ───────────────────── public entry-point ──────────────────────
     def search(self, keyword: str, page: int = 1, size: int = 30, **kwargs) -> List[Article]:
@@ -159,7 +163,7 @@ class BaseNewsScraper(ABC):
         except Exception:
             return resp.text
 
-    # Browser helper – override/extend for Selenium/Playwright
+    # Browser helper – override/extend for Selenium
     def _fetch_via_browser(self, url: str, params: Dict[str, Any]) -> str:  # noqa: D401
         if self.USE_BROWSER and not self._driver:
             self._init_browser()
