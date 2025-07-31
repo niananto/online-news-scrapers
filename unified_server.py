@@ -59,6 +59,10 @@ from news_scrapers import (
     TheHinduScraper,
     BBCScraper,
     CNNScraper,
+    AljazeeraScraper,
+    NewYorkTimesScraper,
+    ReutersScraper,
+    TheDiplomatScraper,
 )
 from news_scrapers.base import Article
 from database_service import DatabaseService
@@ -98,6 +102,10 @@ SCRAPER_MAP = {
     "the_hindu": TheHinduScraper,
     "bbc": BBCScraper,
     "cnn": CNNScraper,
+    "aljazeera": AljazeeraScraper,
+    "new_york_times": NewYorkTimesScraper,
+    "reuters": ReutersScraper,
+    "the_diplomat": TheDiplomatScraper,
 }
 OUTLET_CHOICES: set[str] = set(SCRAPER_MAP.keys())
 
@@ -142,12 +150,16 @@ SCHEDULER_CONFIG = {
         'telegraph_india',
         'the_hindu',
         'bbc',
-        'cnn'
+        'cnn',
+        'aljazeera',
+        'new_york_times',
+        'reuters',
+        'the_diplomat'
     ],
     'keyword': 'bangladesh',
     'limit': 5,
     'page_size': 25,
-    'interval_minutes': 5,  # Run every 30 minutes
+    'interval_minutes': 30,  # Run every 30 minutes
     # Enhanced scheduler options for graceful handling
     'max_instances': 1,           # Prevent overlapping jobs
     'coalesce': True,             # Combine missed runs
