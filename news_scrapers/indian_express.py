@@ -61,7 +61,7 @@ class IndianExpressScraper(BaseNewsScraper):
 
         self.PAYLOAD = {
             "action": "load_tag_data",
-            "tag_security": "4021c11242",
+            "tag_security": "f8924c116b",
             "tag_page": page,
             "tag_id": self._get_tag_id_from_keyword(keyword) or "442185855",  # This is for "bangladesh"
             "post_type": "article",
