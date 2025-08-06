@@ -117,7 +117,7 @@ scheduler = AsyncIOScheduler()
 
 # Classification API configuration
 CLASSIFICATION_API_URL = os.getenv('CLASSIFICATION_API_URL', 'http://localhost:8000/api/v1/content-classification/classify-batch')
-CLASSIFICATION_API_TIMEOUT = int(os.getenv('CLASSIFICATION_API_TIMEOUT', '1000'))
+CLASSIFICATION_API_TIMEOUT = int(os.getenv('CLASSIFICATION_API_TIMEOUT', '3000'))
 
 # FastAPI app
 app = FastAPI(
