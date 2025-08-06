@@ -24,7 +24,7 @@ pip install -r requirements.txt
 ```bash
 # Database configuration
 export DB_HOST=localhost
-export DB_DATABASE=shottify_db
+export DB_DATABASE=shottify_db_new
 export DB_USER=postgres
 export DB_PASSWORD=shottify123
 export DB_PORT=5432
@@ -229,7 +229,7 @@ International: the_guardian, washington_post
 ```bash
 # Required Database Settings
 DB_HOST=localhost
-DB_DATABASE=shottify_db  
+DB_DATABASE=shottify_db_new 
 DB_USER=postgres
 DB_PASSWORD=your_password
 DB_PORT=5432

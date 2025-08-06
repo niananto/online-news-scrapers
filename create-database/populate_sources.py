@@ -15,7 +15,7 @@ def populate_sources_table():
     # Database connection parameters
     db_config = {
         'host': os.getenv('DB_HOST', 'localhost'),
-        'database': 'shottify_db',
+        'database': 'shottify_db_new',
         'user': os.getenv('DB_USER', 'postgres'),
         'password': os.getenv('DB_PASSWORD', 'shottify123'),
         'port': os.getenv('DB_PORT', '5432')

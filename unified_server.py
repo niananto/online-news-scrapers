@@ -21,6 +21,7 @@ from typing import List, Optional, Dict, Any
 import datetime
 import os
 from dotenv import load_dotenv
+import aiohttp
 
 # Load environment variables from .env file
 load_dotenv()
@@ -113,6 +114,10 @@ OUTLET_CHOICES: set[str] = set(SCRAPER_MAP.keys())
 EXECUTOR = ThreadPoolExecutor(max_workers=4)
 db_service = DatabaseService()
 scheduler = AsyncIOScheduler()
+
+# Classification API configuration
+CLASSIFICATION_API_URL = os.getenv('CLASSIFICATION_API_URL', 'http://localhost:8000/api/v1/content-classification/classify-batch')
+CLASSIFICATION_API_TIMEOUT = int(os.getenv('CLASSIFICATION_API_TIMEOUT', '1000'))
 
 # FastAPI app
 app = FastAPI(
@@ -246,6 +251,65 @@ class ArticleModel(BaseModel):
 # ---------------------------------------------------------------------------
 # Core Functions
 # ---------------------------------------------------------------------------
+async def call_classification_api(content_ids: List[str]) -> Dict[str, Any]:
+    """Call the classification API to classify articles by their IDs"""
+    if not content_ids:
+        return {
+            "successful": 0,
+            "failed": 0,
+            "total_classified": 0
+        }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = CLASSIFICATION_API_URL
+            payload = {"content_ids": content_ids}
+            
+            logger.info(f"🤖 Calling classification API for {len(content_ids)} articles...")
+            
+            async with session.post(
+                url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=CLASSIFICATION_API_TIMEOUT)
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    # Response format: {"results": [...], "total_classified": N}
+                    total_classified = result.get('total_classified', 0)
+                    total_requested = len(content_ids)
+                    failed_count = total_requested - total_classified
+                    
+                    logger.info(f"✅ Classification API: {total_classified} classified out of {total_requested} requested")
+                    
+                    return {
+                        "successful": total_classified,
+                        "failed": failed_count,
+                        "total_classified": total_classified
+                    }
+                else:
+                    error_text = await response.text()
+                    logger.error(f"❌ Classification API error: {response.status} - {error_text}")
+                    return {
+                        "successful": 0,
+                        "failed": len(content_ids),
+                        "total_classified": 0
+                    }
+                    
+    except asyncio.TimeoutError:
+        logger.error(f"⏰ Classification API timeout after {CLASSIFICATION_API_TIMEOUT}s")
+        return {
+            "successful": 0,
+            "failed": len(content_ids),
+            "total_classified": 0
+        }
+    except Exception as e:
+        logger.error(f"❌ Classification API exception: {e}")
+        return {
+            "successful": 0,
+            "failed": len(content_ids),
+            "total_classified": 0
+        }
+
 async def _run_scraper(scraper_cls, keyword: str, limit: int, page_size: int) -> List[Article]:
     """Run scraper asynchronously"""
     def _blocking_call() -> List[Article]:
@@ -292,6 +356,11 @@ async def scrape_and_populate_outlet(outlet: str, keyword: str, limit: int, page
         logger.info(f"💾 Inserting {len(article_dicts)} articles from {outlet}...")
         stats = db_service.insert_articles_to_db(article_dicts, outlet)
         
+        # Call classification API if articles were inserted
+        classification_result = {"successful": 0, "failed": 0}
+        if stats["inserted"] > 0 and stats.get("inserted_ids"):
+            classification_result = await call_classification_api(stats["inserted_ids"])
+        
         return {
             "outlet": outlet,
             "scraped": len(articles),
@@ -299,6 +368,8 @@ async def scrape_and_populate_outlet(outlet: str, keyword: str, limit: int, page
             "inserted": stats["inserted"],
             "duplicates_skipped": stats["duplicates_skipped"],
             "errors": stats["errors"],
+            "classified": classification_result.get("successful", 0),
+            "classification_failed": classification_result.get("failed", 0),
             "status": "success"
         }
         
@@ -312,6 +383,8 @@ async def scrape_and_populate_outlet(outlet: str, keyword: str, limit: int, page
             "inserted": 0,
             "duplicates_skipped": 0,
             "errors": 1,
+            "classified": 0,
+            "classification_failed": 0,
             "status": "timeout"
         }
     except Exception as e:
@@ -324,6 +397,8 @@ async def scrape_and_populate_outlet(outlet: str, keyword: str, limit: int, page
             "inserted": 0,
             "duplicates_skipped": 0,
             "errors": 1,
+            "classified": 0,
+            "classification_failed": 0,
             "status": "error"
         }
 
@@ -411,10 +486,13 @@ async def scheduled_scrape_job():
     total_inserted = sum(r.get("inserted", 0) for r in results)
     total_duplicates = sum(r.get("duplicates_skipped", 0) for r in results)
     total_errors = sum(r.get("errors", 0) for r in results)
+    total_classified = sum(r.get("classified", 0) for r in results)
+    total_classification_failed = sum(r.get("classification_failed", 0) for r in results)
     successful_outlets = len([r for r in results if r.get('status') == 'success'])
     failed_outlets = len([r for r in results if r.get('status') != 'success'])
     
     logger.info(f"✅ Scheduled scrape completed: {total_inserted} inserted, {total_duplicates} duplicates, {total_errors} errors")
+    logger.info(f"🤖 Classification: {total_classified} successful, {total_classification_failed} failed")
     logger.info(f"📊 Outlets: {successful_outlets} successful, {failed_outlets} failed")
     
     # Log failures for debugging
@@ -473,6 +551,8 @@ async def scrape_and_populate(req: ScrapeAndPopulateRequest):
     total_inserted = sum(r.get("inserted", 0) for r in results)
     total_duplicates = sum(r.get("duplicates_skipped", 0) for r in results)
     total_errors = sum(r.get("errors", 0) for r in results)
+    total_classified = sum(r.get("classified", 0) for r in results)
+    total_classification_failed = sum(r.get("classification_failed", 0) for r in results)
     
     return {
         "summary": {
@@ -480,7 +560,9 @@ async def scrape_and_populate(req: ScrapeAndPopulateRequest):
             "total_scraped": total_scraped,
             "total_inserted": total_inserted,
             "total_duplicates": total_duplicates,
-            "total_errors": total_errors
+            "total_errors": total_errors,
+            "total_classified": total_classified,
+            "total_classification_failed": total_classification_failed
         },
         "results": results,
         "timestamp": datetime.datetime.now().isoformat()

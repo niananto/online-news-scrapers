@@ -5,7 +5,7 @@
             "server": "localhost",
             "port": 5432,
             "driver": "PostgreSQL",
-            "database": "shottify_db",
+            "database": "shottify_db_new",
             "username": "postgres",
             "name": "local_db_1"
         }

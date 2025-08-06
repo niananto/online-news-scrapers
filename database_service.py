@@ -53,9 +53,9 @@ class DatabaseService:
         # Remove None values to keep JSON clean
         return {k: v for k, v in transformed.items() if v is not None}
 
-    def insert_articles_to_db(self, articles: List[Dict[Any, Any]], outlet: str) -> Dict[str, int]:
-        """Insert articles into content_items table with deduplication"""
-        stats = {"inserted": 0, "duplicates_skipped": 0, "errors": 0}
+    def insert_articles_to_db(self, articles: List[Dict[Any, Any]], outlet: str) -> Dict[str, Any]:
+        """Insert articles into content_items table with deduplication and return inserted IDs"""
+        stats = {"inserted": 0, "duplicates_skipped": 0, "errors": 0, "inserted_ids": []}
         
         try:
             conn = psycopg2.connect(**self.db_config)
@@ -85,7 +85,7 @@ class DatabaseService:
                     if isinstance(author_name, list):
                         author_name = ', '.join(author_name) if author_name else None
                     
-                    # Insert with ON CONFLICT for deduplication
+                    # Insert with ON CONFLICT for deduplication and RETURNING id
                     insert_sql = """
                     INSERT INTO content_items (
                         source_id, 
@@ -102,6 +102,7 @@ class DatabaseService:
                         ingested_at
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (url) DO NOTHING
+                    RETURNING id
                     """
                     
                     cursor.execute(insert_sql, (
@@ -119,10 +120,12 @@ class DatabaseService:
                         datetime.now()
                     ))
                     
-                    # Check if row was actually inserted
+                    # Check if row was actually inserted and get the ID
                     if cursor.rowcount > 0:
+                        inserted_id = cursor.fetchone()[0]
                         stats["inserted"] += 1
-                        logger.debug(f"✅ Inserted article: {url}")
+                        stats["inserted_ids"].append(str(inserted_id))  # Convert UUID to string
+                        logger.debug(f"✅ Inserted article: {url} with ID: {inserted_id}")
                     else:
                         stats["duplicates_skipped"] += 1
                         logger.debug(f"⏭️ Skipped duplicate: {url}")
