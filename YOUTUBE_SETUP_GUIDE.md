@@ -57,7 +57,7 @@ pip install -r requirements-youtube.txt
 ```bash
 # Create database tables
 python create-database/sources_table.py
-python create-database/youtube_videos_table.py
+python create-database/youtube_content_table.py
 ```
 
 ### Step 4: Test the Pipeline
@@ -79,7 +79,7 @@ python unified_server.py
 
 ## 📊 Database Schema
 
-The pipeline creates a comprehensive `youtube_videos` table with the following structure:
+The pipeline creates a comprehensive `youtube_content` table with the following structure:
 
 ### Core Video Metadata
 - `video_id`: YouTube's unique identifier (primary key for deduplication)

@@ -3,9 +3,9 @@ from psycopg2 import sql
 import os
 from datetime import datetime
 
-def create_youtube_videos_table():
+def create_youtube_content_table():
     """
-    Creates the youtube_videos table in the shottify_db PostgreSQL database
+    Creates the youtube_content table in the shottify_db PostgreSQL database
     Based on the existing content_items pattern but optimized for YouTube video data
     """
     
@@ -18,9 +18,9 @@ def create_youtube_videos_table():
         'port': os.getenv('DB_PORT', '5432')
     }
     
-    # SQL to create the youtube_videos table
+    # SQL to create the youtube_content table
     create_table_sql = """
-    CREATE TABLE IF NOT EXISTS youtube_videos (
+    CREATE TABLE IF NOT EXISTS youtube_content (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_id UUID NOT NULL,
         raw_data JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -77,60 +77,60 @@ def create_youtube_videos_table():
         search_vector TSVECTOR,
         
         -- Foreign key constraint
-        CONSTRAINT fk_youtube_videos_source_id FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE,
+        CONSTRAINT fk_youtube_content_source_id FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE,
         
         -- Unique constraint for video_id (YouTube's unique identifier)
-        CONSTRAINT uk_youtube_videos_video_id UNIQUE (video_id)
+        CONSTRAINT uk_youtube_content_video_id UNIQUE (video_id)
     );
     """
     
     # SQL to create indexes
     create_indexes_sql = [
         # Primary search indexes
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_source_id ON youtube_videos(source_id);",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_video_id ON youtube_videos(video_id);",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_channel_id ON youtube_videos(channel_id);",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_channel_handle ON youtube_videos(channel_handle);",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_processing_status ON youtube_videos(processing_status);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_source_id ON youtube_content(source_id);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_video_id ON youtube_content(video_id);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_channel_id ON youtube_content(channel_id);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_channel_handle ON youtube_content(channel_handle);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_processing_status ON youtube_content(processing_status);",
         
         # Time-based indexes
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_published_at ON youtube_videos(published_at DESC);",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_ingested_at ON youtube_videos(ingested_at DESC);",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_last_updated ON youtube_videos(last_updated DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_published_at ON youtube_content(published_at DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_ingested_at ON youtube_content(ingested_at DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_last_updated ON youtube_content(last_updated DESC);",
         
         # Engagement metrics indexes
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_view_count ON youtube_videos(view_count DESC);",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_like_count ON youtube_videos(like_count DESC);",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_comment_count ON youtube_videos(comment_count DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_view_count ON youtube_content(view_count DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_like_count ON youtube_content(like_count DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_comment_count ON youtube_content(comment_count DESC);",
         
         # Content search indexes
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_title ON youtube_videos USING gin(to_tsvector('english', title)) WHERE title IS NOT NULL;",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_description ON youtube_videos USING gin(to_tsvector('english', description)) WHERE description IS NOT NULL;",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_english_transcript ON youtube_videos USING gin(to_tsvector('english', english_transcript)) WHERE english_transcript IS NOT NULL;",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_search_vector ON youtube_videos USING gin(search_vector) WHERE search_vector IS NOT NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_title ON youtube_content USING gin(to_tsvector('english', title)) WHERE title IS NOT NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_description ON youtube_content USING gin(to_tsvector('english', description)) WHERE description IS NOT NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_english_transcript ON youtube_content USING gin(to_tsvector('english', english_transcript)) WHERE english_transcript IS NOT NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_search_vector ON youtube_content USING gin(search_vector) WHERE search_vector IS NOT NULL;",
         
         # Array and JSON indexes
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_tags ON youtube_videos USING gin(tags) WHERE tags IS NOT NULL;",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_transcript_languages ON youtube_videos USING gin(transcript_languages) WHERE transcript_languages IS NOT NULL;",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_comments ON youtube_videos USING gin(comments) WHERE comments IS NOT NULL;",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_raw_data ON youtube_videos USING gin(raw_data);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_tags ON youtube_content USING gin(tags) WHERE tags IS NOT NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_transcript_languages ON youtube_content USING gin(transcript_languages) WHERE transcript_languages IS NOT NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_comments ON youtube_content USING gin(comments) WHERE comments IS NOT NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_raw_data ON youtube_content USING gin(raw_data);",
         
         # Language and content indexes
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_video_language ON youtube_videos(video_language) WHERE video_language IS NOT NULL;",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_content_category ON youtube_videos(content_category) WHERE content_category IS NOT NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_video_language ON youtube_content(video_language) WHERE video_language IS NOT NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_content_category ON youtube_content(content_category) WHERE content_category IS NOT NULL;",
         
         # Analysis indexes
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_sentiment_score ON youtube_videos(sentiment_score) WHERE sentiment_score IS NOT NULL;",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_needs_review ON youtube_videos(needs_manual_review) WHERE needs_manual_review = true;",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_sentiment_score ON youtube_content(sentiment_score) WHERE sentiment_score IS NOT NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_needs_review ON youtube_content(needs_manual_review) WHERE needs_manual_review = true;",
         
         # Composite indexes for common queries
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_channel_published ON youtube_videos(channel_id, published_at DESC);",
-        "CREATE INDEX IF NOT EXISTS idx_youtube_videos_status_updated ON youtube_videos(processing_status, last_updated DESC);"
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_channel_published ON youtube_content(channel_id, published_at DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_youtube_content_status_updated ON youtube_content(processing_status, last_updated DESC);"
     ]
     
     # SQL to create trigger function for updated_at
     create_trigger_function_sql = """
-    CREATE OR REPLACE FUNCTION update_youtube_videos_updated_at()
+    CREATE OR REPLACE FUNCTION update_youtube_content_updated_at()
     RETURNS TRIGGER AS $$
     BEGIN
         NEW.last_updated = NOW();
@@ -141,16 +141,16 @@ def create_youtube_videos_table():
     
     # SQL to create trigger for updated_at
     create_trigger_sql = """
-    DROP TRIGGER IF EXISTS update_youtube_videos_updated_at_trigger ON youtube_videos;
-    CREATE TRIGGER update_youtube_videos_updated_at_trigger 
-        BEFORE UPDATE ON youtube_videos
+    DROP TRIGGER IF EXISTS update_youtube_content_updated_at_trigger ON youtube_content;
+    CREATE TRIGGER update_youtube_content_updated_at_trigger 
+        BEFORE UPDATE ON youtube_content
         FOR EACH ROW 
-        EXECUTE FUNCTION update_youtube_videos_updated_at();
+        EXECUTE FUNCTION update_youtube_content_updated_at();
     """
     
     # SQL to create trigger function for search_vector
     create_search_vector_function_sql = """
-    CREATE OR REPLACE FUNCTION update_youtube_videos_search_vector()
+    CREATE OR REPLACE FUNCTION update_youtube_content_search_vector()
     RETURNS TRIGGER AS $$
     BEGIN
         NEW.search_vector = 
@@ -166,11 +166,11 @@ def create_youtube_videos_table():
     
     # SQL to create trigger for search_vector
     create_search_vector_trigger_sql = """
-    DROP TRIGGER IF EXISTS update_youtube_videos_search_vector_trigger ON youtube_videos;
-    CREATE TRIGGER update_youtube_videos_search_vector_trigger 
-        BEFORE INSERT OR UPDATE ON youtube_videos
+    DROP TRIGGER IF EXISTS update_youtube_content_search_vector_trigger ON youtube_content;
+    CREATE TRIGGER update_youtube_content_search_vector_trigger 
+        BEFORE INSERT OR UPDATE ON youtube_content
         FOR EACH ROW 
-        EXECUTE FUNCTION update_youtube_videos_search_vector();
+        EXECUTE FUNCTION update_youtube_content_search_vector();
     """
     
     try:
@@ -180,7 +180,7 @@ def create_youtube_videos_table():
         cursor = conn.cursor()
         
         # Create the table
-        print("Creating youtube_videos table...")
+        print("Creating youtube_content table...")
         cursor.execute(create_table_sql)
         
         # Create indexes
@@ -224,7 +224,7 @@ def create_youtube_videos_table():
         print("YouTube source entry ensured!")
         
     except psycopg2.Error as e:
-        print(f"Error creating youtube_videos table: {e}")
+        print(f"Error creating youtube_content table: {e}")
         if conn:
             conn.rollback()
     
@@ -243,10 +243,10 @@ def create_youtube_videos_table():
 
 def main():
     """
-    Main function to create the youtube_videos table
+    Main function to create the youtube_content table
     """
-    print("Starting youtube_videos table creation...")
-    create_youtube_videos_table()
+    print("Starting youtube_content table creation...")
+    create_youtube_content_table()
     print("Script completed.")
 
 if __name__ == "__main__":

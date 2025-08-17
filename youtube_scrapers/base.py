@@ -203,10 +203,11 @@ class BaseYouTubeScraper(ABC):
         target_languages = bengali_codes + english_codes
         
         # Configure yt-dlp options - EXACT COPY from working proof of concept
+        # Modified to include both manual and auto-generated transcripts
         ydl_opts = {
             'skip_download': True,
             'writesubtitles': True,
-            'writeautomaticsub': True,
+            'writeautomaticsub': True,  # ENABLED: Include auto-generated transcripts
             'listsubtitles': True,
             'subtitlesformat': 'json3/best',
             'quiet': True,
@@ -246,7 +247,7 @@ class BaseYouTubeScraper(ABC):
                             }
                 
                 if not available_captions:
-                    print(f"No Bengali or English captions found for video {video_id}")
+                    print(f"No Bengali or English captions (manual or auto-generated) found for video {video_id}")
                     return {}
                 
                 # Process each available target language

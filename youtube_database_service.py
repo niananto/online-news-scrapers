@@ -108,6 +108,7 @@ class YouTubeDatabaseService:
     def insert_single_video(self, video: YouTubeVideo) -> Dict[str, Any]:
         """
         Insert a single YouTube video into the database
+        Only inserts videos that have English transcripts available
         
         Args:
             video (YouTubeVideo): Single video to insert
@@ -115,6 +116,26 @@ class YouTubeDatabaseService:
         Returns:
             Dict[str, Any]: Result with status and error info
         """
+        # Check if English transcript is available before insertion
+        if not video.english_transcript or not video.english_transcript.strip():
+            return {
+                'status': 'skipped',
+                'reason': 'No English transcript available',
+                'video_id': video.video_id,
+                'title': video.title
+            }
+        
+        # Optional: Additional duration check at database level (safety net)
+        # This can be commented out if duration filtering is handled earlier
+        # if hasattr(video, 'duration_seconds') and video.duration_seconds is not None:
+        #     if video.duration_seconds < 15 or video.duration_seconds > 7200:
+        #         return {
+        #             'status': 'skipped',
+        #             'reason': f'Duration out of range: {video.duration_seconds}s',
+        #             'video_id': video.video_id,
+        #             'title': video.title
+        #         }
+        
         conn = None
         cursor = None
         
@@ -124,7 +145,7 @@ class YouTubeDatabaseService:
             
             # Prepare insert query
             insert_query = """
-                INSERT INTO youtube_videos (
+                INSERT INTO youtube_content (
                     source_id, raw_data, video_id, title, description, url, thumbnail_url,
                     channel_id, channel_title, channel_handle, published_at,
                     duration_seconds, view_count, like_count, comment_count,
@@ -225,7 +246,7 @@ class YouTubeDatabaseService:
             
             # Prepare insert query with ON CONFLICT for deduplication
             insert_query = """
-                INSERT INTO youtube_videos (
+                INSERT INTO youtube_content (
                     source_id, raw_data, video_id, title, description, url, thumbnail_url,
                     channel_id, channel_title, channel_handle, published_at,
                     duration_seconds, view_count, like_count, comment_count,
@@ -246,6 +267,15 @@ class YouTubeDatabaseService:
             
             for video in videos:
                 try:
+                    # Check if English transcript is available before processing
+                    if not video.english_transcript or not video.english_transcript.strip():
+                        results['failed_videos'] += 1
+                        results['errors'].append({
+                            'video_id': getattr(video, 'video_id', 'unknown'),
+                            'error': 'No English transcript available - video skipped'
+                        })
+                        continue
+                    
                     # Get channel-specific source_id
                     channel_handle = getattr(video, 'channel_handle', None)
                     channel_title = getattr(video, 'channel_title', None)
@@ -387,7 +417,7 @@ class YouTubeDatabaseService:
             cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             
             query = """
-                SELECT * FROM youtube_videos 
+                SELECT * FROM youtube_content 
                 WHERE channel_handle = %s 
                 ORDER BY published_at DESC 
                 LIMIT %s OFFSET %s
@@ -425,7 +455,7 @@ class YouTubeDatabaseService:
             
             query = """
                 SELECT *, ts_rank(search_vector, plainto_tsquery('english', %s)) as rank
-                FROM youtube_videos 
+                FROM youtube_content 
                 WHERE search_vector @@ plainto_tsquery('english', %s)
                 ORDER BY rank DESC, published_at DESC
                 LIMIT %s
@@ -460,13 +490,13 @@ class YouTubeDatabaseService:
             stats = {}
             
             # Total videos count
-            cursor.execute("SELECT COUNT(*) FROM youtube_videos")
+            cursor.execute("SELECT COUNT(*) FROM youtube_content")
             stats['total_videos'] = cursor.fetchone()[0]
             
             # Videos by channel
             cursor.execute("""
                 SELECT channel_handle, COUNT(*) as video_count
-                FROM youtube_videos 
+                FROM youtube_content 
                 GROUP BY channel_handle 
                 ORDER BY video_count DESC 
                 LIMIT 10
@@ -476,14 +506,14 @@ class YouTubeDatabaseService:
             
             # Recent videos count (last 7 days)
             cursor.execute("""
-                SELECT COUNT(*) FROM youtube_videos 
+                SELECT COUNT(*) FROM youtube_content 
                 WHERE published_at > NOW() - INTERVAL '7 days'
             """)
             stats['recent_videos_7d'] = cursor.fetchone()[0]
             
             # Videos with transcripts
             cursor.execute("""
-                SELECT COUNT(*) FROM youtube_videos 
+                SELECT COUNT(*) FROM youtube_content 
                 WHERE english_transcript IS NOT NULL OR bengali_transcript IS NOT NULL
             """)
             stats['videos_with_transcripts'] = cursor.fetchone()[0]
@@ -491,7 +521,7 @@ class YouTubeDatabaseService:
             # Language distribution
             cursor.execute("""
                 SELECT video_language, COUNT(*) as count
-                FROM youtube_videos 
+                FROM youtube_content 
                 WHERE video_language IS NOT NULL
                 GROUP BY video_language 
                 ORDER BY count DESC 
@@ -506,7 +536,7 @@ class YouTubeDatabaseService:
                     AVG(view_count) as avg_views,
                     AVG(like_count) as avg_likes,
                     AVG(comment_count) as avg_comments
-                FROM youtube_videos 
+                FROM youtube_content 
                 WHERE view_count > 0
             """)
             metrics = cursor.fetchone()
@@ -548,7 +578,7 @@ class YouTubeDatabaseService:
             cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             
             query = """
-                SELECT * FROM youtube_videos 
+                SELECT * FROM youtube_content 
                 WHERE processing_status = %s 
                 AND (english_transcript IS NOT NULL OR bengali_transcript IS NOT NULL)
                 ORDER BY published_at DESC 

@@ -57,10 +57,10 @@ pip install -r requirements.txt
 ### 2. Database Setup
 ```bash
 # Create YouTube tables
-python create-database/youtube_videos_table.py
+python create-database/youtube_content_table.py
 
 # This creates:
-# - youtube_videos table with comprehensive schema
+# - youtube_content table with comprehensive schema
 # - Indexes for optimal query performance
 # - Full-text search capabilities
 # - Automatic timestamp triggers
@@ -209,7 +209,7 @@ POST /youtube/schedule/trigger
 
 ### YouTube Videos Table
 ```sql
-CREATE TABLE youtube_videos (
+CREATE TABLE youtube_content (
     id UUID PRIMARY KEY,
     source_id UUID NOT NULL,
     raw_data JSONB NOT NULL,
@@ -368,7 +368,7 @@ export YOUTUBE_API_KEY="your_key"
 export DB_PASSWORD="your_password"
 
 # 2. Create database tables
-python create-database/youtube_videos_table.py
+python create-database/youtube_content_table.py
 
 # 3. Test the pipeline
 python test_youtube_pipeline.py
@@ -390,7 +390,7 @@ curl -X POST "http://localhost:8000/youtube/scrape-channels" \
 
 ### Documentation
 - **API Docs**: http://localhost:8000/docs (when server is running)
-- **Database Schema**: See `create-database/youtube_videos_table.py`
+- **Database Schema**: See `create-database/youtube_content_table.py`
 - **Test Examples**: See `test_youtube_pipeline.py`
 
 ### Architecture Integration

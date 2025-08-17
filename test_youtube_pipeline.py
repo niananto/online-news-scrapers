@@ -74,9 +74,9 @@ def test_database_setup():
         import sys
         import os
         sys.path.append(os.path.join(os.path.dirname(__file__), 'create-database'))
-        from youtube_videos_table import create_youtube_videos_table
+        from youtube_videos_table import create_youtube_content_table
         print("🏗️  Ensuring YouTube tables exist...")
-        create_youtube_videos_table()
+        create_youtube_content_table()
         print("✅ Database schema verified")
         
         return True

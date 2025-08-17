@@ -80,21 +80,27 @@ YOUTUBE_SCHEDULER_CONFIG = {
         '@TheEconomicTimes',
         '@thetelegraphindiaonline',
         '@NDTV',
-        '@indiatoday'
+        '@indiatoday',
+        '@WashingtonPost',
+        '@nytimes'
     ],
     'max_results_per_channel': 10,  # Reduced to avoid rate limiting
-    'keywords': ['bangladesh', 'Trump', 'hindu'],
+    'keywords': ['bangladesh', 'Jamaat', 'Save Hindus', 'Terrorists', 'Facist Yunus', 'Terrorist Yunus', 'Minority', 'Hindu nationalist', 'Hindu minority Bangladesh',],
     'hashtags': [],
     'include_comments': True,
     'include_transcripts': True,
     'comments_limit': 20,
-    'interval_minutes': 120,  # Run every 2 hours (safer for yt-dlp)
+    'interval_minutes': 1440,  # Run every 2 hours (safer for yt-dlp)
     'max_instances': 1,
     'coalesce': True,
-    'misfire_grace_time': 300,  # 5 minutes grace
+    'misfire_grace_time': 300,  # 5 minutes graceS
     'enabled': True,  # Enabled by default for YouTube monitoring
-    'days_back': 10,  # Only fetch videos from last 10 days for monitoring
-    'use_date_range': True  # Enable date range filtering
+    'days_back': 30,  # Only fetch videos from last 10 days for monitoring
+    'use_date_range': False,  # Enable date range filtering
+    # Duration filtering to skip too short/long videos
+    'min_duration_seconds': 15,    # Skip videos shorter than 15 seconds
+    'max_duration_seconds': 7200,  # Skip videos longer than 2 hours
+    'filter_by_duration': True     # Enable duration filtering
 }
 
 # ---------------------------------------------------------------------------
@@ -111,6 +117,10 @@ class YouTubeScrapeRequest(BaseModel):
     include_comments: bool = Field(True, description="Whether to fetch comments")
     include_transcripts: bool = Field(True, description="Whether to fetch transcripts")
     comments_limit: int = Field(50, ge=1, le=100, description="Maximum comments per video")
+    # Duration filtering parameters
+    filter_by_duration: bool = Field(True, description="Whether to apply duration filtering")
+    min_duration_seconds: int = Field(15, ge=1, le=3600, description="Minimum video duration in seconds (1-3600)")
+    max_duration_seconds: int = Field(7200, ge=60, le=28800, description="Maximum video duration in seconds (60-28800)")
 
 class YouTubeSchedulerConfigRequest(BaseModel):
     channels: List[str] = Field(..., description="YouTube channel handles to monitor")
@@ -124,6 +134,10 @@ class YouTubeSchedulerConfigRequest(BaseModel):
     enabled: bool = Field(True, description="Whether YouTube monitoring is enabled")
     days_back: int = Field(3, ge=1, le=30, description="Only fetch videos from last N days (1-30)")
     use_date_range: bool = Field(True, description="Whether to use date range filtering")
+    # Duration filtering parameters
+    filter_by_duration: bool = Field(True, description="Whether to apply duration filtering")
+    min_duration_seconds: int = Field(15, ge=1, le=3600, description="Minimum video duration in seconds (1-3600)")
+    max_duration_seconds: int = Field(7200, ge=60, le=28800, description="Maximum video duration in seconds (60-28800)")
 
 class YouTubeVideoModel(BaseModel):
     video_id: str
@@ -256,6 +270,26 @@ async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **
                     video.video_language = stats.get('defaultAudioLanguage', 'unknown')
                     video.raw_data.update({'statistics': stats})
                 
+                # Check duration filtering before processing transcripts/comments
+                filter_by_duration = kwargs.get('filter_by_duration', True)
+                min_duration_seconds = kwargs.get('min_duration_seconds', 15)
+                max_duration_seconds = kwargs.get('max_duration_seconds', 7200)
+                
+                if filter_by_duration and video.duration_seconds is not None:
+                    if min_duration_seconds and video.duration_seconds < min_duration_seconds:
+                        logger.warning(f"Skipping video {video.video_id} - Too short ({video.duration_seconds}s < {min_duration_seconds}s)")
+                        failed_count += 1
+                        continue
+                    if max_duration_seconds and video.duration_seconds > max_duration_seconds:
+                        logger.warning(f"Skipping video {video.video_id} - Too long ({video.duration_seconds}s > {max_duration_seconds}s)")
+                        failed_count += 1
+                        continue
+                    logger.info(f"Duration check passed: {video.duration_seconds}s")
+                elif filter_by_duration and video.duration_seconds is None:
+                    logger.warning(f"Skipping video {video.video_id} - Duration unknown")
+                    failed_count += 1
+                    continue
+                
                 # Get comments if requested
                 if kwargs.get('include_comments', True):
                     try:
@@ -283,17 +317,40 @@ async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **
                                     video.bengali_transcript = transcript_text
                                 elif lang.startswith('en'):
                                     video.english_transcript = transcript_text
+                            
+                            # Check if English transcript is available (requirement: must have English transcript)
+                            if not video.english_transcript or not video.english_transcript.strip():
+                                logger.warning(f"Skipping video {video.video_id} - No English transcript available")
+                                failed_count += 1
+                                continue  # Skip this video entirely
+                        else:
+                            logger.warning(f"Skipping video {video.video_id} - No transcripts found")
+                            failed_count += 1
+                            continue  # Skip this video entirely
                     except Exception as e:
-                        logger.warning(f"Could not get transcripts for {video.video_id}: {e}")
-                        video.transcript_languages = []
-                        video.bengali_transcript = ""
-                        video.english_transcript = ""
+                        logger.warning(f"Skipping video {video.video_id} - Could not get transcripts: {e}")
+                        failed_count += 1
+                        continue  # Skip this video entirely
+                else:
+                    # If transcripts not requested, skip the video (since we require English transcripts)
+                    logger.warning(f"Skipping video {video.video_id} - Transcripts not requested but required")
+                    failed_count += 1
+                    continue
+                
+                # Final safety check before database insertion
+                if not video.english_transcript or not video.english_transcript.strip():
+                    logger.warning(f"Final check failed - Skipping video {video.video_id}: No English transcript")
+                    failed_count += 1
+                    continue
                 
                 # Store video immediately in database
                 db_result = youtube_db_service.insert_single_video(video)
                 if db_result['status'] == 'success':
                     stored_count += 1
                     logger.info(f"💾 Stored video: {video.title[:50]}...")
+                elif db_result['status'] == 'skipped':
+                    logger.warning(f"Video {video.video_id} skipped by database service: {db_result.get('reason', 'Unknown reason')}")
+                    failed_count += 1
                 else:
                     logger.warning(f"Failed to store video {video.video_id}: {db_result.get('error', 'Unknown error')}")
                     failed_count += 1
@@ -425,7 +482,11 @@ async def scheduled_youtube_job():
             hashtags=YOUTUBE_SCHEDULER_CONFIG.get('hashtags'),
             include_comments=YOUTUBE_SCHEDULER_CONFIG['include_comments'],
             include_transcripts=YOUTUBE_SCHEDULER_CONFIG['include_transcripts'],
-            comments_limit=YOUTUBE_SCHEDULER_CONFIG['comments_limit']
+            comments_limit=YOUTUBE_SCHEDULER_CONFIG['comments_limit'],
+            # Duration filtering parameters
+            filter_by_duration=YOUTUBE_SCHEDULER_CONFIG.get('filter_by_duration', True),
+            min_duration_seconds=YOUTUBE_SCHEDULER_CONFIG.get('min_duration_seconds', 15),
+            max_duration_seconds=YOUTUBE_SCHEDULER_CONFIG.get('max_duration_seconds', 7200)
         )
         
         summary = result['summary']
@@ -482,7 +543,11 @@ async def youtube_scrape_channels(req: YouTubeScrapeRequest):
             hashtags=req.hashtags,
             include_comments=req.include_comments,
             include_transcripts=req.include_transcripts,
-            comments_limit=req.comments_limit
+            comments_limit=req.comments_limit,
+            # Duration filtering parameters
+            filter_by_duration=req.filter_by_duration,
+            min_duration_seconds=req.min_duration_seconds,
+            max_duration_seconds=req.max_duration_seconds
         )
         
         return result
@@ -492,7 +557,7 @@ async def youtube_scrape_channels(req: YouTubeScrapeRequest):
         raise HTTPException(status_code=500, detail=f"YouTube scraping failed: {str(e)}")
 
 @app.get("/videos")
-async def get_youtube_videos(
+async def get_youtube_content(
     channel_handle: Optional[str] = None,
     search_term: Optional[str] = None,
     limit: int = 100,
@@ -558,7 +623,7 @@ async def get_monitored_channels():
                 COUNT(*) as video_count,
                 MAX(published_at) as latest_video,
                 AVG(view_count) as avg_views
-            FROM youtube_videos 
+            FROM youtube_content 
             WHERE channel_handle IS NOT NULL
             GROUP BY channel_handle, channel_title
             ORDER BY video_count DESC
@@ -610,7 +675,11 @@ async def configure_youtube_scheduler(req: YouTubeSchedulerConfigRequest):
             'interval_minutes': req.interval_minutes,
             'enabled': req.enabled,
             'days_back': req.days_back,
-            'use_date_range': req.use_date_range
+            'use_date_range': req.use_date_range,
+            # Duration filtering parameters
+            'filter_by_duration': req.filter_by_duration,
+            'min_duration_seconds': req.min_duration_seconds,
+            'max_duration_seconds': req.max_duration_seconds
         })
         
         # Remove existing YouTube job

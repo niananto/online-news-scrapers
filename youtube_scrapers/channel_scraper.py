@@ -49,7 +49,10 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
                       hashtags: Optional[List[str]] = None,
                       include_comments: bool = True,
                       include_transcripts: bool = True,
-                      comments_limit: int = 50) -> List[YouTubeVideo]:
+                      comments_limit: int = 50,
+                      min_duration_seconds: Optional[int] = 15,
+                      max_duration_seconds: Optional[int] = 7200,
+                      filter_by_duration: bool = True) -> List[YouTubeVideo]:
         """
         Extract videos from a YouTube channel
         
@@ -63,6 +66,9 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
             include_comments (bool): Whether to fetch comments
             include_transcripts (bool): Whether to fetch transcripts
             comments_limit (int): Maximum comments per video
+            min_duration_seconds (int): Minimum video duration in seconds (default: 15)
+            max_duration_seconds (int): Maximum video duration in seconds (default: 7200)
+            filter_by_duration (bool): Whether to apply duration filtering (default: True)
             
         Returns:
             List[YouTubeVideo]: List of extracted video data
@@ -121,6 +127,19 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
                     video.video_language = stats.get('defaultAudioLanguage', 'unknown')
                     video.raw_data.update({'statistics': stats})
                 
+                # Check duration filtering before processing transcripts/comments
+                if filter_by_duration and video.duration_seconds is not None:
+                    if min_duration_seconds and video.duration_seconds < min_duration_seconds:
+                        print(f"  ⚠️  Skipping video {video.video_id} - Too short ({video.duration_seconds}s < {min_duration_seconds}s minimum)")
+                        continue
+                    if max_duration_seconds and video.duration_seconds > max_duration_seconds:
+                        print(f"  ⚠️  Skipping video {video.video_id} - Too long ({video.duration_seconds}s > {max_duration_seconds}s maximum)")
+                        continue
+                    print(f"  ✅ Duration check passed: {video.duration_seconds}s")
+                elif filter_by_duration and video.duration_seconds is None:
+                    print(f"  ⚠️  Skipping video {video.video_id} - Duration unknown")
+                    continue
+                
                 # Get comments if requested
                 if include_comments:
                     try:
@@ -153,16 +172,25 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
                                     print(f"  Added English transcript ({lang})")
                             
                             print(f"  Found {len(transcript_results)} transcript(s)")
+                            
+                            # Check if English transcript is available (requirement: must have English transcript)
+                            if not video.english_transcript or not video.english_transcript.strip():
+                                print(f"  ⚠️  Skipping video {video.video_id} - No English transcript available")
+                                continue  # Skip this video entirely
                         else:
-                            print(f"  No transcripts found")
+                            print(f"  ⚠️  Skipping video {video.video_id} - No transcripts found")
+                            continue  # Skip this video entirely
                     except Exception as e:
-                        print(f"  Could not get transcripts: {e}")
-                        video.transcript_languages = []
-                        video.bengali_transcript = ""
-                        video.english_transcript = ""
+                        print(f"  ⚠️  Skipping video {video.video_id} - Could not get transcripts: {e}")
+                        continue  # Skip this video entirely
+                else:
+                    # If transcripts not requested, skip the video (since we require English transcripts)
+                    print(f"  ⚠️  Skipping video {video.video_id} - Transcripts not requested but required")
+                    continue
                 
+                # Only add video to processed list if we reach this point (has English transcript)
                 processed_videos.append(video)
-                print(f"  ✅ Video {video.video_id} processed successfully")
+                print(f"  ✅ Video {video.video_id} processed successfully with English transcript")
                 
             except Exception as e:
                 print(f"  ❌ Error processing video {video.video_id}: {e}")
@@ -208,6 +236,7 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
         search_query = ""
         if keywords:
             search_query += " OR ".join(keywords) + " "
+            print(f"🔍 Search query with keywords: '{search_query.strip()}'")
         if hashtags:
             hashtag_parts = []
             for tag in hashtags:
@@ -217,6 +246,10 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
                 if search_query:
                     search_query += " OR "
                 search_query += " OR ".join(hashtag_parts)
+                print(f"🔍 Final search query with hashtags: '{search_query.strip()}'")
+        
+        print(f"🔍 Final search query being sent to YouTube API: '{search_query.strip()}'")
+        print(f"📊 Query length: {len(search_query.strip())} characters")
         
         while len(videos) < max_results:
             try:
@@ -355,7 +388,9 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
                         'likeCount': item['statistics'].get('likeCount', 0),
                         'commentCount': item['statistics'].get('commentCount', 0),
                         'duration': item['contentDetails']['duration'],
-                        'tags': item['snippet'].get('tags', [])
+                        'tags': item['snippet'].get('tags', []),
+                        'defaultAudioLanguage': item['snippet'].get('defaultAudioLanguage'),
+                        'defaultLanguage': item['snippet'].get('defaultLanguage')
                     }
                 
                 return stats
@@ -497,10 +532,11 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
         target_languages = bengali_codes + english_codes
         
         # Configure yt-dlp options - EXACT COPY from working proof of concept
+        # Modified to include both manual and auto-generated transcripts
         ydl_opts = {
             'skip_download': True,
             'writesubtitles': True,
-            'writeautomaticsub': True,
+            'writeautomaticsub': True,  # ENABLED: Include auto-generated transcripts
             'listsubtitles': True,
             'subtitlesformat': 'json3/best',
             'quiet': True,
@@ -540,7 +576,7 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
                             }
                 
                 if not available_captions:
-                    print(f"No Bengali or English captions found for video {video_id}")
+                    print(f"No Bengali or English captions (manual or auto-generated) found for video {video_id}")
                     return results
                 
                 # Process each available target language
