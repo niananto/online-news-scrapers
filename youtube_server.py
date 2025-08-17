@@ -26,6 +26,7 @@ from typing import List, Optional, Dict, Any
 import datetime
 import os
 from dotenv import load_dotenv
+import aiohttp
 
 # Load environment variables from .env file
 load_dotenv()
@@ -51,6 +52,10 @@ logger = logging.getLogger(__name__)
 EXECUTOR = ThreadPoolExecutor(max_workers=2)
 youtube_db_service = YouTubeDatabaseService()
 scheduler = AsyncIOScheduler()
+
+# YouTube Classification API Configuration
+YOUTUBE_CLASSIFICATION_API_URL = os.getenv('YOUTUBE_CLASSIFICATION_API_URL', 'http://localhost:8000/api/v1/youtube/classify-batch')
+YOUTUBE_CLASSIFICATION_API_TIMEOUT = int(os.getenv('YOUTUBE_CLASSIFICATION_API_TIMEOUT', '30000'))
 
 # FastAPI app
 app = FastAPI(
@@ -85,17 +90,17 @@ YOUTUBE_SCHEDULER_CONFIG = {
         '@nytimes'
     ],
     'max_results_per_channel': 10,  # Reduced to avoid rate limiting
-    'keywords': ['bangladesh', 'Jamaat', 'Save Hindus', 'Terrorists', 'Facist Yunus', 'Terrorist Yunus', 'Minority', 'Hindu nationalist', 'Hindu minority Bangladesh',],
+    'keywords': ['bangladesh', 'Jamaat', 'Save Hindus', 'Terrorists', 'Facist Yunus', 'Terrorist Yunus', 'Minority', 'Hindu nationalist', 'Hindu minority Bangladesh'],
     'hashtags': [],
     'include_comments': True,
     'include_transcripts': True,
     'comments_limit': 20,
-    'interval_minutes': 1440,  # Run every 2 hours (safer for yt-dlp)
+    'interval_minutes': 1440,  # Run every 24 hours (safer for yt-dlp)
     'max_instances': 1,
     'coalesce': True,
     'misfire_grace_time': 300,  # 5 minutes graceS
     'enabled': True,  # Enabled by default for YouTube monitoring
-    'days_back': 30,  # Only fetch videos from last 10 days for monitoring
+    'days_back': 1,  # Only fetch videos from last 10 days for monitoring
     'use_date_range': False,  # Enable date range filtering
     # Duration filtering to skip too short/long videos
     'min_duration_seconds': 15,    # Skip videos shorter than 15 seconds
@@ -190,6 +195,85 @@ class YouTubeVideoModel(BaseModel):
 # Core Functions
 # ---------------------------------------------------------------------------
 
+async def call_youtube_batch_classification_api(youtube_content_ids: List[str]) -> Dict[str, Any]:
+    """Call the YouTube batch classification API to classify videos by their UUIDs"""
+    if not youtube_content_ids:
+        return {
+            "successful": 0,
+            "failed": 0,
+            "total_classified": 0
+        }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = YOUTUBE_CLASSIFICATION_API_URL
+            payload = {"youtube_content_ids": youtube_content_ids}
+            
+            logger.info(f"🤖 Calling YouTube classification API for {len(youtube_content_ids)} videos...")
+            
+            async with session.post(
+                url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=YOUTUBE_CLASSIFICATION_API_TIMEOUT/1000)
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    # Response format: {"results": [...], "total_classified": N}
+                    total_classified = result.get('total_classified', 0)
+                    total_requested = len(youtube_content_ids)
+                    failed_count = total_requested - total_classified
+                    
+                    logger.info(f"✅ YouTube Classification API: {total_classified} classified out of {total_requested} requested")
+                    
+                    return {
+                        "successful": total_classified,
+                        "failed": failed_count,
+                        "total_classified": total_classified
+                    }
+                elif response.status == 404:
+                    # All items were skipped - not an error, just no content to classify
+                    error_text = await response.text()
+                    logger.warning(f"⚠️ All YouTube videos were skipped for classification: {error_text}")
+                    return {
+                        "successful": 0,
+                        "failed": 0,  # Not really "failed" - they were skipped
+                        "total_classified": 0,
+                        "skipped": len(youtube_content_ids)
+                    }
+                elif response.status == 400:
+                    # Bad request (shouldn't happen with our validation, but handle it)
+                    error_text = await response.text()
+                    logger.error(f"❌ Bad request to YouTube classification API: {error_text}")
+                    return {
+                        "successful": 0,
+                        "failed": len(youtube_content_ids),
+                        "total_classified": 0
+                    }
+                else:
+                    # Other HTTP errors
+                    error_text = await response.text()
+                    logger.error(f"❌ YouTube Classification API error: {response.status} - {error_text}")
+                    return {
+                        "successful": 0,
+                        "failed": len(youtube_content_ids),
+                        "total_classified": 0
+                    }
+                    
+    except asyncio.TimeoutError:
+        logger.error(f"⏰ YouTube Classification API timeout after {YOUTUBE_CLASSIFICATION_API_TIMEOUT/1000}s")
+        return {
+            "successful": 0,
+            "failed": len(youtube_content_ids),
+            "total_classified": 0
+        }
+    except Exception as e:
+        logger.error(f"❌ YouTube Classification API exception: {e}")
+        return {
+            "successful": 0,
+            "failed": len(youtube_content_ids),
+            "total_classified": 0
+        }
+
 async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **kwargs) -> Dict[str, Any]:
     """
     Scrape a single YouTube channel and store videos immediately
@@ -246,6 +330,7 @@ async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **
         # Process and store each video individually
         stored_count = 0
         failed_count = 0
+        stored_content_ids = []  # Collect UUIDs for batch classification
         
         for i, video in enumerate(videos):
             try:
@@ -347,10 +432,11 @@ async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **
                 db_result = youtube_db_service.insert_single_video(video)
                 if db_result['status'] == 'success':
                     stored_count += 1
+                    stored_content_ids.append(db_result['content_id'])  # Collect UUID for classification
                     logger.info(f"💾 Stored video: {video.title[:50]}...")
                 elif db_result['status'] == 'skipped':
-                    logger.warning(f"Video {video.video_id} skipped by database service: {db_result.get('reason', 'Unknown reason')}")
-                    failed_count += 1
+                    logger.info(f"📋 Skipped existing video: {video.video_id}")
+                    # Note: We don't count skipped videos as failed anymore
                 else:
                     logger.warning(f"Failed to store video {video.video_id}: {db_result.get('error', 'Unknown error')}")
                     failed_count += 1
@@ -362,12 +448,37 @@ async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **
         
         logger.info(f"✅ Channel {channel_handle}: {stored_count} stored, {failed_count} failed")
         
+        # Call batch classification API for newly stored videos
+        classification_result = {"successful": 0, "failed": 0, "total_classified": 0}
+        if stored_content_ids:
+            try:
+                logger.info(f"🤖 Starting batch classification for {len(stored_content_ids)} new videos...")
+                classification_result = await call_youtube_batch_classification_api(stored_content_ids)
+                
+                # Enhanced logging based on classification results
+                total_classified = classification_result.get('total_classified', 0)
+                skipped = classification_result.get('skipped', 0)
+                failed = classification_result.get('failed', 0)
+                
+                if total_classified > 0:
+                    logger.info(f"✅ Classification completed: {total_classified} videos classified")
+                if skipped > 0:
+                    logger.info(f"⚠️ Classification skipped: {skipped} videos were not eligible")
+                if failed > 0:
+                    logger.warning(f"❌ Classification failed: {failed} videos could not be processed")
+                    
+            except Exception as e:
+                logger.error(f"❌ Batch classification failed: {e}")
+        else:
+            logger.info("📋 No new videos to classify")
+        
         return {
             "channel": channel_handle,
             "scraped": len(videos),
             "stored": stored_count,
             "failed": failed_count,
             "quota_used": scraper.get_quota_usage(),
+            "classification": classification_result,
             "status": "success"
         }
         
@@ -406,6 +517,7 @@ async def scrape_and_store_youtube_channels(channels: List[str], api_key: str, *
         total_stored = 0
         total_failed = 0
         total_scraped = 0
+        total_classified = 0
         
         for channel in channels:
             result = await scrape_and_store_youtube_channel(channel, api_key, **kwargs)
@@ -416,6 +528,7 @@ async def scrape_and_store_youtube_channels(channels: List[str], api_key: str, *
                 total_failed += result.get('failed', 0)
                 total_scraped += result['scraped']
                 total_quota_used += result['quota_used']
+                total_classified += result.get('classification', {}).get('total_classified', 0)
         
         # Calculate summary statistics
         successful_channels = sum(1 for r in results if r['status'] == 'success')
@@ -429,6 +542,7 @@ async def scrape_and_store_youtube_channels(channels: List[str], api_key: str, *
                 "total_scraped": total_scraped,
                 "total_stored": total_stored,
                 "total_failed": total_failed,
+                "total_classified": total_classified,
                 "quota_used": total_quota_used
             },
             "channel_results": results,

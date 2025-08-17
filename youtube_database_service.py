@@ -143,7 +143,7 @@ class YouTubeDatabaseService:
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            # Prepare insert query
+            # Prepare insert query - skip duplicates entirely
             insert_query = """
                 INSERT INTO youtube_content (
                     source_id, raw_data, video_id, title, description, url, thumbnail_url,
@@ -156,15 +156,8 @@ class YouTubeDatabaseService:
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s
                 )
-                ON CONFLICT (video_id) DO UPDATE SET
-                    view_count = EXCLUDED.view_count,
-                    like_count = EXCLUDED.like_count,
-                    comment_count = EXCLUDED.comment_count,
-                    english_transcript = EXCLUDED.english_transcript,
-                    bengali_transcript = EXCLUDED.bengali_transcript,
-                    transcript_languages = EXCLUDED.transcript_languages,
-                    comments = EXCLUDED.comments,
-                    processing_status = EXCLUDED.processing_status
+                ON CONFLICT (video_id) DO NOTHING
+                RETURNING id
             """
             
             # Get or create source for this channel
@@ -176,19 +169,24 @@ class YouTubeDatabaseService:
             # Execute insert
             cursor.execute(insert_query, video_data)
             
-            # Check if it was an insert or update
-            if cursor.rowcount > 0:
+            # Check if video was inserted (new) or skipped (duplicate)
+            result = cursor.fetchone()
+            if result:
+                # Video was successfully inserted
                 conn.commit()
                 return {
                     'status': 'success',
-                    'new_video': cursor.rowcount == 1,
+                    'content_id': str(result[0]),  # Return the UUID
+                    'is_new': True,
                     'video_id': video.video_id,
                     'title': video.title
                 }
             else:
+                # Video already existed, was skipped
+                conn.commit()
                 return {
-                    'status': 'duplicate',
-                    'new_video': False,
+                    'status': 'skipped',
+                    'reason': 'Video already exists',
                     'video_id': video.video_id,
                     'title': video.title
                 }
