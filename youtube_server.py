@@ -70,24 +70,24 @@ YOUTUBE_SCHEDULER_CONFIG = {
     'channels': [
         '@WION',
         '@HT-Videos',
-        '@ThePioneer.',
-        '@CNN',
-        '@indianexpress',
+        # '@ThePioneer.',
+        # '@CNN',
+        # '@indianexpress',
         '@TheHinduOfficial',
-        '@themillenniumpost',
+        # '@themillenniumpost',
         '@Firstpost',
         '@TheQuint',
-        '@businessstandard',
+        # '@businessstandard',
         '@timesofindia',
-        '@TheTribunechd',
+        # '@TheTribunechd',
         '@indiadotcom',
-        '@TheStatesman',
-        '@TheEconomicTimes',
-        '@thetelegraphindiaonline',
+        # '@TheStatesman',
+        # '@TheEconomicTimes',
+        # '@thetelegraphindiaonline',
         '@NDTV',
-        '@indiatoday',
-        '@WashingtonPost',
-        '@nytimes'
+        # '@indiatoday',
+        # '@WashingtonPost',
+        # '@nytimes'
     ],
     'max_results_per_channel': 10,  # Reduced to avoid rate limiting
     'keywords': ['bangladesh', 'Jamaat', 'Save Hindus', 'Terrorists', 'Facist Yunus', 'Terrorist Yunus', 'Minority', 'Hindu nationalist', 'Hindu minority Bangladesh'],
@@ -95,13 +95,13 @@ YOUTUBE_SCHEDULER_CONFIG = {
     'include_comments': True,
     'include_transcripts': True,
     'comments_limit': 20,
-    'interval_minutes': 1440,  # Run every 24 hours (safer for yt-dlp)
+    'interval_minutes': 5,  # Run every 24 hours (safer for yt-dlp)
     'max_instances': 1,
     'coalesce': True,
     'misfire_grace_time': 300,  # 5 minutes graceS
     'enabled': True,  # Enabled by default for YouTube monitoring
-    'days_back': 1,  # Only fetch videos from last 10 days for monitoring
-    'use_date_range': False,  # Enable date range filtering
+    'days_back': 1,  # Only fetch videos from last 1 days for monitoring
+    'use_date_range': True,  # Enable date range filtering
     # Duration filtering to skip too short/long videos
     'min_duration_seconds': 15,    # Skip videos shorter than 15 seconds
     'max_duration_seconds': 7200,  # Skip videos longer than 2 hours

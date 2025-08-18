@@ -231,25 +231,68 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
         """Search for videos in a channel with optional filtering"""
         videos = []
         next_page_token = None
+        QUERY_CHAR_LIMIT = 1000
         
-        # Build search query with OR logic for keywords
-        search_query = ""
+        # # Build search query with OR logic for keywords
+        # search_query = ""
+        # if keywords:
+        #     search_query += " OR ".join(keywords) + " "
+        #     print(f"🔍 Search query with keywords: '{search_query.strip()}'")
+        # if hashtags:
+        #     hashtag_parts = []
+        #     for tag in hashtags:
+        #         hashtag = tag if tag.startswith('#') else f"#{tag}"
+        #         hashtag_parts.append(hashtag)
+        #     if hashtag_parts:
+        #         if search_query:
+        #             search_query += " OR "
+        #         search_query += " OR ".join(hashtag_parts)
+        #         print(f"🔍 Final search query with hashtags: '{search_query.strip()}'")
+        
+        # print(f"🔍 Final search query being sent to YouTube API: '{search_query.strip()}'")
+        # print(f"📊 Query length: {len(search_query.strip())} characters")
+
+        # Build optimized search query with proper syntax
+        search_terms = []
         if keywords:
-            search_query += " OR ".join(keywords) + " "
-            print(f"🔍 Search query with keywords: '{search_query.strip()}'")
+            for keyword in keywords:
+                # Add quotes for multi-word terms (exact phrase)
+                if ' ' in keyword:
+                    search_terms.append(f'"{keyword}"')
+                else:
+                    search_terms.append(keyword)
+            
+            print(f"🔍 Search query with keywords: '{'|'.join(search_terms)}'")
+        
+        # Handle hashtags properly
         if hashtags:
-            hashtag_parts = []
             for tag in hashtags:
                 hashtag = tag if tag.startswith('#') else f"#{tag}"
-                hashtag_parts.append(hashtag)
-            if hashtag_parts:
-                if search_query:
-                    search_query += " OR "
-                search_query += " OR ".join(hashtag_parts)
-                print(f"🔍 Final search query with hashtags: '{search_query.strip()}'")
+                search_terms.append(hashtag)  # Append to same list for OR with keywords
+            
+            print(f"🔍 Final search query with hashtags: '{'|'.join(search_terms)}'")
         
-        print(f"🔍 Final search query being sent to YouTube API: '{search_query.strip()}'")
-        print(f"📊 Query length: {len(search_query.strip())} characters")
+        # Join all terms with | for OR logic
+        search_query = "|".join(search_terms)
+        
+        # Check query length and truncate by removing last terms if needed
+        if len(search_query) > QUERY_CHAR_LIMIT:
+            print(f"⚠️ Search query exceeds {QUERY_CHAR_LIMIT} character limit. Truncating...")
+            # Split and rebuild by removing from end
+            terms = search_query.split("|")
+            truncated_terms = []
+            current_length = 0
+            for term in terms:
+                if current_length + len(term) + (1 if truncated_terms else 0) > QUERY_CHAR_LIMIT:
+                    break
+                if truncated_terms:
+                    current_length += 1  # For the |
+                truncated_terms.append(term)
+                current_length += len(term)
+            search_query = "|".join(truncated_terms)
+            print(f"🔍 Truncated query: '{search_query}'")
+    
+        print(f"🔍 Final search query length: {len(search_query)} characters")
         
         while len(videos) < max_results:
             try:
@@ -263,8 +306,8 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
                     'key': self.api_key
                 }
                 
-                if search_query.strip():
-                    params['q'] = search_query.strip()
+                if search_query:
+                    params['q'] = search_query
                 
                 if published_after:
                     params['publishedAfter'] = published_after
