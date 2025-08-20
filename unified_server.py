@@ -265,7 +265,7 @@ async def call_classification_api(content_ids: List[str]) -> Dict[str, Any]:
             url = CLASSIFICATION_API_URL
             payload = {"content_ids": content_ids}
             
-            logger.info(f"🤖 Calling classification API for {len(content_ids)} articles...")
+            logger.info(f"[AI] Calling classification API for {len(content_ids)} articles...")
             
             async with session.post(
                 url,
@@ -279,7 +279,7 @@ async def call_classification_api(content_ids: List[str]) -> Dict[str, Any]:
                     total_requested = len(content_ids)
                     failed_count = total_requested - total_classified
                     
-                    logger.info(f"✅ Classification API: {total_classified} classified out of {total_requested} requested")
+                    logger.info(f"[OK] Classification API: {total_classified} classified out of {total_requested} requested")
                     
                     return {
                         "successful": total_classified,
@@ -288,7 +288,7 @@ async def call_classification_api(content_ids: List[str]) -> Dict[str, Any]:
                     }
                 else:
                     error_text = await response.text()
-                    logger.error(f"❌ Classification API error: {response.status} - {error_text}")
+                    logger.error(f"[ERROR] Classification API error: {response.status} - {error_text}")
                     return {
                         "successful": 0,
                         "failed": len(content_ids),
@@ -296,14 +296,14 @@ async def call_classification_api(content_ids: List[str]) -> Dict[str, Any]:
                     }
                     
     except asyncio.TimeoutError:
-        logger.error(f"⏰ Classification API timeout after {CLASSIFICATION_API_TIMEOUT}s")
+        logger.error(f"[TIME] Classification API timeout after {CLASSIFICATION_API_TIMEOUT}s")
         return {
             "successful": 0,
             "failed": len(content_ids),
             "total_classified": 0
         }
     except Exception as e:
-        logger.error(f"❌ Classification API exception: {e}")
+        logger.error(f"[ERROR] Classification API exception: {e}")
         return {
             "successful": 0,
             "failed": len(content_ids),
@@ -335,7 +335,7 @@ async def scrape_and_populate_outlet(outlet: str, keyword: str, limit: int, page
         scraper_cls = SCRAPER_MAP[outlet]
         
         # Scrape articles with timeout
-        logger.info(f"🔍 Scraping {outlet} for '{keyword}'...")
+        logger.info(f"[SEARCH] Scraping {outlet} for '{keyword}'...")
         articles = await asyncio.wait_for(
             _run_scraper(scraper_cls, keyword, limit, page_size),
             timeout=timeout
@@ -353,7 +353,7 @@ async def scrape_and_populate_outlet(outlet: str, keyword: str, limit: int, page
         article_dicts = [asdict(art) for art in unique]
         
         # Insert to database
-        logger.info(f"💾 Inserting {len(article_dicts)} articles from {outlet}...")
+        logger.info(f"[SAVE] Inserting {len(article_dicts)} articles from {outlet}...")
         stats = db_service.insert_articles_to_db(article_dicts, outlet)
         
         # Call classification API if articles were inserted
@@ -374,7 +374,7 @@ async def scrape_and_populate_outlet(outlet: str, keyword: str, limit: int, page
         }
         
     except asyncio.TimeoutError:
-        logger.error(f"⏰ Timeout scraping {outlet} after {timeout}s")
+        logger.error(f"[TIME] Timeout scraping {outlet} after {timeout}s")
         return {
             "outlet": outlet,
             "error": f"Timeout after {timeout}s",
@@ -388,7 +388,7 @@ async def scrape_and_populate_outlet(outlet: str, keyword: str, limit: int, page
             "status": "timeout"
         }
     except Exception as e:
-        logger.error(f"❌ Error processing {outlet}: {e}")
+        logger.error(f"[ERROR] Error processing {outlet}: {e}")
         return {
             "outlet": outlet,
             "error": str(e),
@@ -419,11 +419,11 @@ async def scrape_outlet_with_retry(outlet: str, keyword: str, limit: int, page_s
                 return result
                 
             # Log retry attempt
-            logger.warning(f"🔄 Retrying {outlet} (attempt {attempt + 2}/{max_retries + 1})")
+            logger.warning(f"[REFRESH] Retrying {outlet} (attempt {attempt + 2}/{max_retries + 1})")
             await asyncio.sleep(5)  # Wait 5 seconds before retry
             
         except Exception as e:
-            logger.error(f"❌ Retry attempt {attempt + 1} failed for {outlet}: {e}")
+            logger.error(f"[ERROR] Retry attempt {attempt + 1} failed for {outlet}: {e}")
             if attempt == max_retries:
                 return {
                     "outlet": outlet,
@@ -438,7 +438,7 @@ async def scrape_outlet_with_retry(outlet: str, keyword: str, limit: int, page_s
 
 async def scheduled_scrape_job():
     """Enhanced scheduled scraping job with error handling and circuit breaking"""
-    logger.info(f"🕐 Starting scheduled scrape at {datetime.datetime.now()}")
+    logger.info(f"[TIME] Starting scheduled scrape at {datetime.datetime.now()}")
     
     # Initialize circuit breaker storage if not exists
     if not hasattr(scheduled_scrape_job, 'failure_counts'):
@@ -491,14 +491,14 @@ async def scheduled_scrape_job():
     successful_outlets = len([r for r in results if r.get('status') == 'success'])
     failed_outlets = len([r for r in results if r.get('status') != 'success'])
     
-    logger.info(f"✅ Scheduled scrape completed: {total_inserted} inserted, {total_duplicates} duplicates, {total_errors} errors")
-    logger.info(f"🤖 Classification: {total_classified} successful, {total_classification_failed} failed")
-    logger.info(f"📊 Outlets: {successful_outlets} successful, {failed_outlets} failed")
+    logger.info(f"[OK] Scheduled scrape completed: {total_inserted} inserted, {total_duplicates} duplicates, {total_errors} errors")
+    logger.info(f"[AI] Classification: {total_classified} successful, {total_classification_failed} failed")
+    logger.info(f"[LIST] Outlets: {successful_outlets} successful, {failed_outlets} failed")
     
     # Log failures for debugging
     for result in results:
         if result.get('status') != 'success':
-            logger.warning(f"⚠️ {result['outlet']}: {result.get('error', 'Unknown error')} (status: {result.get('status')})")
+            logger.warning(f"[WARN] {result['outlet']}: {result.get('error', 'Unknown error')} (status: {result.get('status')})")
 
 # ---------------------------------------------------------------------------
 # API Endpoints
@@ -533,7 +533,7 @@ async def scrape(req: ScrapeRequest):
 @app.post("/scrape-and-populate")
 async def scrape_and_populate(req: ScrapeAndPopulateRequest):
     """Scrape multiple outlets and populate database"""
-    logger.info(f"🚀 Starting scrape and populate for {len(req.outlets)} outlets")
+    logger.info(f"[START] Starting scrape and populate for {len(req.outlets)} outlets")
     
     results = []
     for outlet in req.outlets:
@@ -659,8 +659,8 @@ async def scheduler_control(req: SchedulerControlRequest, background_tasks: Back
             replace_existing=True
         )
         
-        logger.info(f"🔧 Scheduler reconfigured: {config.interval_minutes}min intervals, {len(config.outlets)} outlets")
-        logger.info(f"🔧 Enhanced settings: retries={config.max_retries_per_outlet}, timeout={config.timeout_per_outlet}s, circuit_breaker={config.circuit_breaker_threshold}")
+        logger.info(f"[REFRESH] Scheduler reconfigured: {config.interval_minutes}min intervals, {len(config.outlets)} outlets")
+        logger.info(f"[REFRESH] Enhanced settings: retries={config.max_retries_per_outlet}, timeout={config.timeout_per_outlet}s, circuit_breaker={config.circuit_breaker_threshold}")
         
         message = "Scheduler configured successfully with enhanced options"
         action_performed = "configure"
@@ -759,9 +759,9 @@ async def startup_event():
     
     # Start scheduler
     scheduler.start()
-    logger.info(f"🚀 Unified News Scraper Server started")
-    logger.info(f"⏰ First scrape scheduled in 60 seconds at {start_time.strftime('%H:%M:%S')}")
-    logger.info(f"🕐 Then every {SCHEDULER_CONFIG['interval_minutes']} minutes")
+    logger.info(f"[START] Unified News Scraper Server started")
+    logger.info(f"[TIME] First scrape scheduled in 60 seconds at {start_time.strftime('%H:%M:%S')}")
+    logger.info(f"[TIME] Then every {SCHEDULER_CONFIG['interval_minutes']} minutes")
     logger.info(f"📰 Monitoring {len(SCHEDULER_CONFIG['outlets'])} outlets: {SCHEDULER_CONFIG['outlets']}")
 
 @app.on_event("shutdown")

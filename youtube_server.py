@@ -209,7 +209,7 @@ async def call_youtube_batch_classification_api(youtube_content_ids: List[str]) 
             url = YOUTUBE_CLASSIFICATION_API_URL
             payload = {"youtube_content_ids": youtube_content_ids}
             
-            logger.info(f"🤖 Calling YouTube classification API for {len(youtube_content_ids)} videos...")
+            logger.info(f"[AI] Calling YouTube classification API for {len(youtube_content_ids)} videos...")
             
             async with session.post(
                 url,
@@ -223,7 +223,7 @@ async def call_youtube_batch_classification_api(youtube_content_ids: List[str]) 
                     total_requested = len(youtube_content_ids)
                     failed_count = total_requested - total_classified
                     
-                    logger.info(f"✅ YouTube Classification API: {total_classified} classified out of {total_requested} requested")
+                    logger.info(f"[OK] YouTube Classification API: {total_classified} classified out of {total_requested} requested")
                     
                     return {
                         "successful": total_classified,
@@ -233,7 +233,7 @@ async def call_youtube_batch_classification_api(youtube_content_ids: List[str]) 
                 elif response.status == 404:
                     # All items were skipped - not an error, just no content to classify
                     error_text = await response.text()
-                    logger.warning(f"⚠️ All YouTube videos were skipped for classification: {error_text}")
+                    logger.warning(f"[WARN] All YouTube videos were skipped for classification: {error_text}")
                     return {
                         "successful": 0,
                         "failed": 0,  # Not really "failed" - they were skipped
@@ -243,7 +243,7 @@ async def call_youtube_batch_classification_api(youtube_content_ids: List[str]) 
                 elif response.status == 400:
                     # Bad request (shouldn't happen with our validation, but handle it)
                     error_text = await response.text()
-                    logger.error(f"❌ Bad request to YouTube classification API: {error_text}")
+                    logger.error(f"[ERROR] Bad request to YouTube classification API: {error_text}")
                     return {
                         "successful": 0,
                         "failed": len(youtube_content_ids),
@@ -252,7 +252,7 @@ async def call_youtube_batch_classification_api(youtube_content_ids: List[str]) 
                 else:
                     # Other HTTP errors
                     error_text = await response.text()
-                    logger.error(f"❌ YouTube Classification API error: {response.status} - {error_text}")
+                    logger.error(f"[ERROR] YouTube Classification API error: {response.status} - {error_text}")
                     return {
                         "successful": 0,
                         "failed": len(youtube_content_ids),
@@ -260,14 +260,14 @@ async def call_youtube_batch_classification_api(youtube_content_ids: List[str]) 
                     }
                     
     except asyncio.TimeoutError:
-        logger.error(f"⏰ YouTube Classification API timeout after {YOUTUBE_CLASSIFICATION_API_TIMEOUT/1000}s")
+        logger.error(f"[TIME] YouTube Classification API timeout after {YOUTUBE_CLASSIFICATION_API_TIMEOUT/1000}s")
         return {
             "successful": 0,
             "failed": len(youtube_content_ids),
             "total_classified": 0
         }
     except Exception as e:
-        logger.error(f"❌ YouTube Classification API exception: {e}")
+        logger.error(f"[ERROR] YouTube Classification API exception: {e}")
         return {
             "successful": 0,
             "failed": len(youtube_content_ids),
@@ -287,7 +287,7 @@ async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **
         Dict[str, Any]: Scraping and storage results with statistics
     """
     try:
-        logger.info(f"🎥 Starting YouTube scrape for channel: {channel_handle}")
+        logger.info(f"[VIDEO] Starting YouTube scrape for channel: {channel_handle}")
         
         # Initialize scraper
         scraper = YouTubeChannelScraper(api_key)
@@ -316,7 +316,7 @@ async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **
         )
         
         if not videos:
-            logger.info(f"✅ No videos found for {channel_handle}")
+            logger.info(f"[OK] No videos found for {channel_handle}")
             return {
                 "channel": channel_handle,
                 "scraped": 0,
@@ -325,7 +325,7 @@ async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **
                 "status": "success"
             }
         
-        logger.info(f"📋 Found {len(videos)} videos from {channel_handle}, processing individually...")
+        logger.info(f"[LIST] Found {len(videos)} videos from {channel_handle}, processing individually...")
         
         # Process and store each video individually
         stored_count = 0
@@ -433,26 +433,26 @@ async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **
                 if db_result['status'] == 'success':
                     stored_count += 1
                     stored_content_ids.append(db_result['content_id'])  # Collect UUID for classification
-                    logger.info(f"💾 Stored video: {video.title[:50]}...")
+                    logger.info(f"[SAVE] Stored video: {video.title[:50]}...")
                 elif db_result['status'] == 'skipped':
-                    logger.info(f"📋 Skipped existing video: {video.video_id}")
+                    logger.info(f"[LIST] Skipped existing video: {video.video_id}")
                     # Note: We don't count skipped videos as failed anymore
                 else:
                     logger.warning(f"Failed to store video {video.video_id}: {db_result.get('error', 'Unknown error')}")
                     failed_count += 1
                     
             except Exception as e:
-                logger.error(f"❌ Error processing video {video.video_id}: {e}")
+                logger.error(f"[ERROR] Error processing video {video.video_id}: {e}")
                 failed_count += 1
                 continue
         
-        logger.info(f"✅ Channel {channel_handle}: {stored_count} stored, {failed_count} failed")
+        logger.info(f"[OK] Channel {channel_handle}: {stored_count} stored, {failed_count} failed")
         
         # Call batch classification API for newly stored videos
         classification_result = {"successful": 0, "failed": 0, "total_classified": 0}
         if stored_content_ids:
             try:
-                logger.info(f"🤖 Starting batch classification for {len(stored_content_ids)} new videos...")
+                logger.info(f"[AI] Starting batch classification for {len(stored_content_ids)} new videos...")
                 classification_result = await call_youtube_batch_classification_api(stored_content_ids)
                 
                 # Enhanced logging based on classification results
@@ -461,16 +461,16 @@ async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **
                 failed = classification_result.get('failed', 0)
                 
                 if total_classified > 0:
-                    logger.info(f"✅ Classification completed: {total_classified} videos classified")
+                    logger.info(f"[OK] Classification completed: {total_classified} videos classified")
                 if skipped > 0:
-                    logger.info(f"⚠️ Classification skipped: {skipped} videos were not eligible")
+                    logger.info(f"[WARN] Classification skipped: {skipped} videos were not eligible")
                 if failed > 0:
-                    logger.warning(f"❌ Classification failed: {failed} videos could not be processed")
+                    logger.warning(f"[ERROR] Classification failed: {failed} videos could not be processed")
                     
             except Exception as e:
-                logger.error(f"❌ Batch classification failed: {e}")
+                logger.error(f"[ERROR] Batch classification failed: {e}")
         else:
-            logger.info("📋 No new videos to classify")
+            logger.info("[LIST] No new videos to classify")
         
         return {
             "channel": channel_handle,
@@ -483,7 +483,7 @@ async def scrape_and_store_youtube_channel(channel_handle: str, api_key: str, **
         }
         
     except Exception as e:
-        logger.error(f"❌ Error scraping YouTube channel {channel_handle}: {e}")
+        logger.error(f"[ERROR] Error scraping YouTube channel {channel_handle}: {e}")
         return {
             "channel": channel_handle,
             "error": str(e),
@@ -507,7 +507,7 @@ async def scrape_and_store_youtube_channels(channels: List[str], api_key: str, *
         Dict[str, Any]: Complete operation results
     """
     try:
-        logger.info(f"🚀 Starting YouTube scrape and store for {len(channels)} channels")
+        logger.info(f"[START] Starting YouTube scrape and store for {len(channels)} channels")
         
         all_videos = []
         results = []
@@ -550,27 +550,27 @@ async def scrape_and_store_youtube_channels(channels: List[str], api_key: str, *
         }
         
     except Exception as e:
-        logger.error(f"❌ Error in YouTube scrape and store operation: {e}")
+        logger.error(f"[ERROR] Error in YouTube scrape and store operation: {e}")
         raise HTTPException(status_code=500, detail=f"YouTube operation failed: {str(e)}")
 
 async def scheduled_youtube_job():
     """Scheduled YouTube monitoring job"""
     if not YOUTUBE_SCHEDULER_CONFIG.get('enabled', False):
-        logger.info("📺 YouTube scheduled monitoring is disabled")
+        logger.info("[TV] YouTube scheduled monitoring is disabled")
         return
     
-    logger.info(f"📺 Starting scheduled YouTube monitoring at {datetime.datetime.now()}")
-    logger.info(f"📺 Monitoring channels: {YOUTUBE_SCHEDULER_CONFIG['channels']}")
+    logger.info(f"[TV] Starting scheduled YouTube monitoring at {datetime.datetime.now()}")
+    logger.info(f"[TV] Monitoring channels: {YOUTUBE_SCHEDULER_CONFIG['channels']}")
     
     # Get YouTube API key
     api_key = os.getenv('YOUTUBE_API_KEY')
     if not api_key:
-        logger.error("❌ YouTube API key not configured for scheduled monitoring")
+        logger.error("[ERROR] YouTube API key not configured for scheduled monitoring")
         return
     
     try:
         channels = YOUTUBE_SCHEDULER_CONFIG['channels']
-        logger.info(f"📺 Monitoring {len(channels)} YouTube channels")
+        logger.info(f"[TV] Monitoring {len(channels)} YouTube channels")
         
         # Calculate date range for filtering (only recent videos)
         published_after = None
@@ -604,13 +604,13 @@ async def scheduled_youtube_job():
         )
         
         summary = result['summary']
-        logger.info(f"✅ YouTube monitoring completed:")
-        logger.info(f"   📺 Channels: {summary['successful_channels']}/{summary['channels_processed']} successful")
-        logger.info(f"   🎥 Videos: {summary['total_scraped']} scraped, {summary['total_stored']} stored, {summary['total_failed']} failed")
-        logger.info(f"   🔄 Quota used: {summary['quota_used']}")
+        logger.info(f"[OK] YouTube monitoring completed:")
+        logger.info(f"   [TV] Channels: {summary['successful_channels']}/{summary['channels_processed']} successful")
+        logger.info(f"   [VIDEO] Videos: {summary['total_scraped']} scraped, {summary['total_stored']} stored, {summary['total_failed']} failed")
+        logger.info(f"   [REFRESH] Quota used: {summary['quota_used']}")
         
     except Exception as e:
-        logger.error(f"❌ Scheduled YouTube monitoring failed: {e}")
+        logger.error(f"[ERROR] Scheduled YouTube monitoring failed: {e}")
 
 # ---------------------------------------------------------------------------
 # API Endpoints
@@ -667,7 +667,7 @@ async def youtube_scrape_channels(req: YouTubeScrapeRequest):
         return result
         
     except Exception as e:
-        logger.error(f"❌ YouTube scraping failed: {e}")
+        logger.error(f"[ERROR] YouTube scraping failed: {e}")
         raise HTTPException(status_code=500, detail=f"YouTube scraping failed: {str(e)}")
 
 @app.get("/videos")
@@ -707,7 +707,7 @@ async def get_youtube_content(
         }
         
     except Exception as e:
-        logger.error(f"❌ Error retrieving YouTube videos: {e}")
+        logger.error(f"[ERROR] Error retrieving YouTube videos: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to retrieve videos: {str(e)}")
 
 @app.get("/stats")
@@ -720,7 +720,7 @@ async def get_youtube_stats():
             "timestamp": datetime.datetime.now().isoformat()
         }
     except Exception as e:
-        logger.error(f"❌ Error getting YouTube stats: {e}")
+        logger.error(f"[ERROR] Error getting YouTube stats: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get statistics: {str(e)}")
 
 @app.get("/channels")
@@ -759,7 +759,7 @@ async def get_monitored_channels():
         }
         
     except Exception as e:
-        logger.error(f"❌ Error getting channels: {e}")
+        logger.error(f"[ERROR] Error getting channels: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get channels: {str(e)}")
     finally:
         if cursor:
@@ -814,9 +814,9 @@ async def configure_youtube_scheduler(req: YouTubeSchedulerConfigRequest):
                 misfire_grace_time=YOUTUBE_SCHEDULER_CONFIG.get('misfire_grace_time', 300)
             )
             
-            logger.info(f"📺 YouTube monitoring configured: {len(req.channels)} channels every {req.interval_minutes} minutes")
+            logger.info(f"[TV] YouTube monitoring configured: {len(req.channels)} channels every {req.interval_minutes} minutes")
         else:
-            logger.info("📺 YouTube monitoring disabled")
+            logger.info("[TV] YouTube monitoring disabled")
         
         return {
             "message": "YouTube scheduler configured successfully",
@@ -825,7 +825,7 @@ async def configure_youtube_scheduler(req: YouTubeSchedulerConfigRequest):
         }
         
     except Exception as e:
-        logger.error(f"❌ Error configuring YouTube scheduler: {e}")
+        logger.error(f"[ERROR] Error configuring YouTube scheduler: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to configure scheduler: {str(e)}")
 
 @app.get("/schedule/status")
@@ -853,7 +853,7 @@ async def get_youtube_scheduler_status():
         }
         
     except Exception as e:
-        logger.error(f"❌ Error getting YouTube scheduler status: {e}")
+        logger.error(f"[ERROR] Error getting YouTube scheduler status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 @app.post("/schedule/trigger")
@@ -876,7 +876,7 @@ async def trigger_youtube_monitoring():
         }
         
     except Exception as e:
-        logger.error(f"❌ Error triggering YouTube monitoring: {e}")
+        logger.error(f"[ERROR] Error triggering YouTube monitoring: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to trigger monitoring: {str(e)}")
 
 @app.post("/schedule/start")
@@ -890,7 +890,7 @@ async def start_scheduler():
         else:
             return {"message": "YouTube scheduler is already running", "status": "running"}
     except Exception as e:
-        logger.error(f"❌ Error starting scheduler: {e}")
+        logger.error(f"[ERROR] Error starting scheduler: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to start scheduler: {str(e)}")
 
 @app.post("/schedule/stop")
@@ -904,7 +904,7 @@ async def stop_scheduler():
         else:
             return {"message": "YouTube scheduler is already stopped", "status": "stopped"}
     except Exception as e:
-        logger.error(f"❌ Error stopping scheduler: {e}")
+        logger.error(f"[ERROR] Error stopping scheduler: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to stop scheduler: {str(e)}")
 
 # ---------------------------------------------------------------------------
@@ -932,15 +932,15 @@ async def startup_event():
             misfire_grace_time=YOUTUBE_SCHEDULER_CONFIG.get('misfire_grace_time', 300),
             replace_existing=True
         )
-        logger.info(f"📺 YouTube monitoring enabled - will start in 60 seconds at {start_time.strftime('%H:%M:%S')}")
-        logger.info(f"🕐 Then every {YOUTUBE_SCHEDULER_CONFIG['interval_minutes']} minutes")
-        logger.info(f"📺 Monitoring {len(YOUTUBE_SCHEDULER_CONFIG['channels'])} YouTube channels: {YOUTUBE_SCHEDULER_CONFIG['channels']}")
+        logger.info(f"[TV] YouTube monitoring enabled - will start in 60 seconds at {start_time.strftime('%H:%M:%S')}")
+        logger.info(f"[TIME] Then every {YOUTUBE_SCHEDULER_CONFIG['interval_minutes']} minutes")
+        logger.info(f"[TV] Monitoring {len(YOUTUBE_SCHEDULER_CONFIG['channels'])} YouTube channels: {YOUTUBE_SCHEDULER_CONFIG['channels']}")
     else:
-        logger.info(f"📺 YouTube monitoring is disabled")
+        logger.info(f"[TV] YouTube monitoring is disabled")
     
     # Start scheduler
     scheduler.start()
-    logger.info(f"🚀 YouTube Content Monitoring Server started")
+    logger.info(f"[START] YouTube Content Monitoring Server started")
 
 @app.on_event("shutdown")
 async def shutdown_event():
