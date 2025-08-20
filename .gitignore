@@ -1,12 +1,36 @@
-*venv*
-.idea
-playground
-.env
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.pyc
+*.pyo
+*.pyd
 
-# Folders to ignore
+# Virtual Environment
+*venv*
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific  
+playground
 dump_image/
 chat-memory/
-
-# Files to ignore
-scheduler config and end points.md
 logs/
+scheduler config and end points.md
+
+# Database
+*.db
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
