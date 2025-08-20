@@ -26,6 +26,7 @@ dump_image/
 chat-memory/
 logs/
 scheduler config and end points.md
+config/settings_backup.py
 
 # Database
 *.db

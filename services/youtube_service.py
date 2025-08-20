@@ -68,7 +68,7 @@ class YouTubeService:
         comments_limit: int = 50,
         filter_by_duration: bool = True,
         min_duration_seconds: int = 15,
-        max_duration_seconds: int = 7200
+        max_duration_seconds: int = 1800
     ) -> List[YouTubeVideo]:
         """
         Scrape videos from a single YouTube channel

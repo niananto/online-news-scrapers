@@ -9,20 +9,19 @@ from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import List, Optional
 import os
+from dotenv import load_dotenv
+
+# Load .env file explicitly
+load_dotenv()
 
 
 class DatabaseSettings(BaseSettings):
     """Database configuration settings"""
-    host: str = Field(default="localhost", env="DB_HOST")
-    database: str = Field(default="shottify_db_new", env="DB_DATABASE") 
-    user: str = Field(default="postgres", env="DB_USER")
-    password: str = Field(default="shottify123", env="DB_PASSWORD")
-    port: int = Field(default=5432, env="DB_PORT")
-    
-    class Config:
-        env_prefix = "DB_"
-        env_file = ".env"
-        extra = "ignore"
+    host: str = Field(default=None, alias="DB_HOST")
+    database: str = Field(default=None, alias="DB_DATABASE") 
+    user: str = Field(default=None, alias="DB_USER")
+    password: str = Field(default=None, alias="DB_PASSWORD")
+    port: int = Field(default=5432, alias="DB_PORT")
 
 
 class NewsSchedulerSettings(BaseSettings):
@@ -30,16 +29,16 @@ class NewsSchedulerSettings(BaseSettings):
     outlets: List[str] = Field(default=[
         'hindustan_times', 'business_standard', 'news18', 'firstpost',
         'republic_world', 'india_dotcom', 'statesman', 'daily_pioneer'
-        # 'south_asia_monitor', 'economic_times', 'india_today', 'ndtv',
-        # 'the_tribune', 'indian_express', 'millennium_post', 'times_of_india',
-        # 'deccan_herald', 'abp_live', 'the_quint', 'the_guardian',
-        # 'washington_post', 'wion', 'telegraph_india', 'the_hindu',
-        # 'bbc', 'cnn', 'aljazeera', 'new_york_times', 'reuters', 'the_diplomat'
+        'south_asia_monitor', 'economic_times', 'india_today', 'ndtv',
+        'the_tribune', 'indian_express', 'millennium_post', 'times_of_india',
+        'deccan_herald', 'abp_live', 'the_quint', 'the_guardian',
+        'washington_post', 'wion', 'telegraph_india', 'the_hindu',
+        'bbc', 'cnn', 'aljazeera', 'new_york_times', 'reuters', 'the_diplomat'
     ])
-    keyword: str = Field(default="bangladesh", env="NEWS_KEYWORD")
-    limit: int = Field(default=5, ge=1, le=500, env="NEWS_LIMIT")
-    page_size: int = Field(default=25, ge=1, le=100, env="NEWS_PAGE_SIZE")
-    interval_minutes: int = Field(default=30, ge=5, le=1440, env="NEWS_INTERVAL_MINUTES")
+    keyword: str = Field(default="bangladesh", alias="NEWS_KEYWORD")
+    limit: int = Field(default=5, ge=1, le=500, alias="NEWS_LIMIT")
+    page_size: int = Field(default=25, ge=1, le=100, alias="NEWS_PAGE_SIZE")
+    interval_minutes: int = Field(default=30, ge=5, le=1440, alias="NEWS_INTERVAL_MINUTES")
     
     # Enhanced scheduler options
     max_instances: int = Field(default=1, ge=1, le=5)
@@ -49,11 +48,6 @@ class NewsSchedulerSettings(BaseSettings):
     max_retries_per_outlet: int = Field(default=2, ge=0, le=10)
     timeout_per_outlet: int = Field(default=180, ge=30, le=600)
     circuit_breaker_threshold: int = Field(default=5, ge=1, le=20)
-    
-    class Config:
-        env_prefix = "NEWS_"
-        env_file = ".env"
-        extra = "ignore"
 
 
 class YouTubeSchedulerSettings(BaseSettings):
@@ -63,7 +57,7 @@ class YouTubeSchedulerSettings(BaseSettings):
         '@HT-Videos', '@TheHinduOfficial', '@RepublicWorld' , '@nytimes' , '@theGuardian' , 
         '@TheQuint', '@timesofindia', '@indiadotcom', '@NDTV' , '@Thediplomatmagazine'
     ])
-    max_results_per_channel: int = Field(default=10, ge=1, le=200, env="YT_MAX_RESULTS")
+    max_results_per_channel: int = Field(default=10, ge=1, le=200, alias="YT_MAX_RESULTS")
     keywords: Optional[List[str]] = Field(default=[
         'bangladesh', 'Younus', 'Sheikh Hasina', 'Facist Younus', 'SaveSecularBangladesh', 'StopHinduPersecution'
     ])
@@ -71,7 +65,7 @@ class YouTubeSchedulerSettings(BaseSettings):
     include_comments: bool = Field(default=True)
     include_transcripts: bool = Field(default=True)
     comments_limit: int = Field(default=20, ge=1, le=100)
-    interval_minutes: int = Field(default=60, ge=5, le=1440, env="YT_INTERVAL_MINUTES")
+    interval_minutes: int = Field(default=60, ge=5, le=1440, alias="YT_INTERVAL_MINUTES")
     
     # Enhanced options
     enabled: bool = Field(default=True)
@@ -87,48 +81,34 @@ class YouTubeSchedulerSettings(BaseSettings):
     max_instances: int = Field(default=1, ge=1, le=5)
     coalesce: bool = Field(default=True)
     misfire_grace_time: int = Field(default=300, ge=60, le=3600)
-    
-    class Config:
-        env_prefix = "YT_"
-        env_file = ".env"
-        extra = "ignore"
 
 
 class ClassificationAPISettings(BaseSettings):
     """External classification API configuration"""
     news_api_url: str = Field(
         default="http://localhost:8000/api/v1/content-classification/classify-batch",
-        env="CLASSIFICATION_API_URL"
+        alias="CLASSIFICATION_API_URL"
     )
     youtube_api_url: str = Field(
         default="http://localhost:8000/api/v1/youtube/classify-batch",
-        env="YOUTUBE_CLASSIFICATION_API_URL"
+        alias="YOUTUBE_CLASSIFICATION_API_URL"
     )
-    timeout_seconds: int = Field(default=240, ge=5, le=3000, env="CLASSIFICATION_TIMEOUT")
-    
-    class Config:
-        env_prefix = "CLASSIFICATION_"
-        env_file = ".env"
-        extra = "ignore"
+    timeout_seconds: int = Field(default=240, ge=5, le=3000, alias="CLASSIFICATION_TIMEOUT")
 
 
 class YouTubeAPISettings(BaseSettings):
     """YouTube Data API configuration"""
-    api_key: Optional[str] = Field(default="AIzaSyCha7lFiwYVkN_Z4XcUyRD_h5gxzZ-EnU0", env="YOUTUBE_API_KEY")
+    api_key: Optional[str] = Field(default=None, alias="YOUTUBE_API_KEY")
     quota_limit: int = Field(default=10000, ge=1000, le=50000)
-    
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
 
 
 class AppSettings(BaseSettings):
     """Main application configuration"""
     app_name: str = Field(default="Unified Scraping Service")
-    debug: bool = Field(default=False, env="DEBUG")
-    host: str = Field(default="127.0.0.1", env="HOST")
-    port: int = Field(default=8000, env="PORT")
-    reload: bool = Field(default=False, env="RELOAD")
+    debug: bool = Field(default=False, alias="DEBUG")
+    host: str = Field(default="127.0.0.1", alias="HOST")
+    port: int = Field(default=8000, alias="PORT")
+    reload: bool = Field(default=False, alias="RELOAD")
     
     # API Configuration
     api_v1_prefix: str = "/api/v1"
@@ -136,15 +116,10 @@ class AppSettings(BaseSettings):
     redoc_url: str = "/redoc"
     
     # Logging
-    log_level: str = Field(default="INFO", env="LOG_LEVEL")
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_format: str = Field(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    log_file: Optional[str] = Field(default="logs/scraper.log", env="LOG_FILE")
-    console_logging: bool = Field(default=False, env="CONSOLE_LOGGING")
-    
-    class Config:
-        env_prefix = "APP_"
-        env_file = ".env"
-        extra = "ignore"
+    log_file: Optional[str] = Field(default="logs/scraper.log", alias="LOG_FILE")
+    console_logging: bool = Field(default=False, alias="CONSOLE_LOGGING")
 
 
 class Settings(BaseSettings):
@@ -157,11 +132,8 @@ class Settings(BaseSettings):
     youtube_api: YouTubeAPISettings = YouTubeAPISettings()
     
     class Config:
-        # Allow loading from .env file
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        extra = "ignore"
+        # This is the only Config we need, at the top level
+        extra = "ignore"  # Ignore extra environment variables
 
 
 # Global settings instance
