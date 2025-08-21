@@ -65,7 +65,7 @@ class YouTubeSchedulerSettings(BaseSettings):
     include_comments: bool = Field(default=True)
     include_transcripts: bool = Field(default=True)
     comments_limit: int = Field(default=20, ge=1, le=100)
-    interval_minutes: int = Field(default=60, ge=5, le=1440, alias="YT_INTERVAL_MINUTES")
+    interval_minutes: int = Field(default=480, ge=5, le=1440, alias="YT_INTERVAL_MINUTES")
     
     # Enhanced options
     enabled: bool = Field(default=True)
