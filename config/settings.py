@@ -93,7 +93,7 @@ class ClassificationAPISettings(BaseSettings):
         default="http://localhost:8000/api/v1/youtube/classify-batch",
         alias="YOUTUBE_CLASSIFICATION_API_URL"
     )
-    timeout_seconds: int = Field(default=240, ge=5, le=3000, alias="CLASSIFICATION_TIMEOUT")
+    timeout_seconds: int = Field(default=30, ge=5, le=3000, alias="CLASSIFICATION_TIMEOUT")
 
 
 class YouTubeAPISettings(BaseSettings):
