@@ -406,6 +406,15 @@ class NewsService:
                             "failed": failed_count,
                             "total_classified": total_classified
                         }
+                    elif response.status == 202:
+                        # Accepted for async processing - this is a success!
+                        result = await response.json()
+                        logger.info(f"[OK] Classification API accepted {len(content_ids)} articles for async processing")
+                        return {
+                            "successful": len(content_ids),
+                            "failed": 0,
+                            "total_classified": len(content_ids)
+                        }
                     else:
                         error_text = await response.text()
                         logger.error(f"Classification API error {response.status}: {error_text}")

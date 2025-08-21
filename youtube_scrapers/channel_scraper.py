@@ -475,14 +475,21 @@ class YouTubeChannelScraper(BaseYouTubeScraper):
                 data = response.json()
                 comments_text = []
                 
-                # Get top-level comments
+                # Get top-level comments and replies up to max_results
                 for item in data.get('items', []):
+                    # Stop if we've reached the limit
+                    if len(comments_text) >= max_results:
+                        break
+                    
+                    # Add top-level comment
                     comment = item['snippet']['topLevelComment']['snippet']
                     comments_text.append(comment['textDisplay'])
                     
-                    # Get replies if they exist
-                    if 'replies' in item:
+                    # Get replies if they exist and we haven't reached limit
+                    if 'replies' in item and len(comments_text) < max_results:
                         for reply in item['replies']['comments']:
+                            if len(comments_text) >= max_results:
+                                break
                             reply_text = reply['snippet']['textDisplay']
                             comments_text.append(reply_text)
                 

@@ -227,6 +227,47 @@ async def get_channel_videos(
         raise HTTPException(status_code=500, detail=f"Failed to get channel videos: {str(e)}")
 
 
+@router.get("/quota-status")
+async def get_quota_status(
+    _: str = Depends(setup_request_context),
+    youtube_service: YouTubeService = Depends(get_youtube_service)
+):
+    """
+    Get current quota status for all YouTube API keys
+    
+    Returns detailed information about API key usage, remaining quota,
+    and rotation status when using multiple keys.
+    """
+    try:
+        status = youtube_service.get_quota_status()
+        return status
+    except Exception as e:
+        logger.error(f"Error getting quota status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get quota status: {str(e)}")
+
+
+@router.post("/quota/reset")
+async def reset_quota_counters(
+    _: str = Depends(setup_request_context),
+    youtube_service: YouTubeService = Depends(get_youtube_service)
+):
+    """
+    Force reset quota counters for all API keys
+    
+    This endpoint is useful for testing or when you need to manually
+    reset the quota tracking. Use with caution in production.
+    """
+    try:
+        if youtube_service.api_pool:
+            youtube_service.api_pool.force_reset()
+            return {"status": "success", "message": "Quota counters reset for all keys"}
+        else:
+            return {"status": "not_applicable", "message": "Multi-key rotation not enabled"}
+    except Exception as e:
+        logger.error(f"Error resetting quota: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset quota: {str(e)}")
+
+
 @router.post("/channels/{channel_handle}/reset-failures")
 async def reset_channel_failures(
     channel_handle: str,

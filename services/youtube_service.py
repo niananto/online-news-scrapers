@@ -18,6 +18,7 @@ load_dotenv()
 from youtube_scrapers.channel_scraper import YouTubeChannelScraper
 from youtube_scrapers.base import YouTubeVideo
 from services.database_service import UnifiedDatabaseService
+from services.youtube_api_pool import YouTubeAPIPool
 from core.logging import get_scraper_logger, log_performance
 from core.exceptions import (
     YouTubeScrapingError, APIError, ConfigurationError,
@@ -37,10 +38,26 @@ class YouTubeService:
         self.settings = get_settings()
         self.db_service = UnifiedDatabaseService()
         
-        # Get YouTube API key from settings
-        self.api_key = self.settings.youtube_api.api_key
-        if not self.api_key:
-            logger.warning("YouTube API key not configured. Some features may not work.")
+        # Initialize API key pool for multi-key support
+        api_keys = self.settings.youtube_api.get_api_keys()
+        if not api_keys:
+            logger.warning("No YouTube API keys configured. Some features may not work.")
+            self.api_pool = None
+            self.api_key = None  # For backward compatibility
+        else:
+            if len(api_keys) > 1:
+                # Use pool for multiple keys
+                self.api_pool = YouTubeAPIPool(
+                    api_keys=api_keys,
+                    quota_per_key=self.settings.youtube_api.quota_limit
+                )
+                self.api_key = None  # Not used when pool is active
+                logger.info(f"[OK] Using API pool with {len(api_keys)} keys")
+            else:
+                # Single key mode (backward compatibility)
+                self.api_pool = None
+                self.api_key = api_keys[0]
+                logger.info("[OK] Using single API key mode")
         
         # Circuit breakers for channels
         self.circuit_breakers = {}
@@ -94,15 +111,27 @@ class YouTubeService:
             YouTubeScrapingError: When scraping fails
             ConfigurationError: When API key is missing
         """
-        if not self.api_key:
-            raise ConfigurationError("YouTube API key not configured")
+        if not self.api_pool and not self.api_key:
+            raise ConfigurationError("No YouTube API keys configured")
         
         if not channel_handle.startswith('@'):
             channel_handle = f'@{channel_handle}'
         
         try:
             with log_performance(logger, f"scraping YouTube channel {channel_handle}"):
-                scraper = YouTubeChannelScraper(self.api_key)
+                # Get API key from pool or use single key
+                if self.api_pool:
+                    # Estimate cost: channel lookup + search + video details
+                    estimated_cost = 150  # Conservative estimate
+                    api_key = self.api_pool.get_available_key(
+                        estimated_cost=estimated_cost,
+                        operation='search'
+                    )
+                    logger.debug(f"Using API key from pool for {channel_handle}")
+                else:
+                    api_key = self.api_key
+                
+                scraper = YouTubeChannelScraper(api_key)
                 
                 # Get channel ID first
                 channel_id = scraper.get_channel_id_from_handle(channel_handle)
@@ -264,10 +293,26 @@ class YouTubeService:
                         if count > 0:
                             logger.info(f"      - {reason.replace('_', ' ').title()}: {count}")
                 
+                # Record API usage if using pool
+                if self.api_pool and api_key:
+                    # Actual cost calculation based on operations performed
+                    actual_cost = 100  # Base search cost
+                    actual_cost += len(videos) * 3  # Video details and stats
+                    if include_comments:
+                        actual_cost += len(processed_videos) * 1  # Comments
+                    
+                    self.api_pool.record_usage(api_key, actual_cost, success=True)
+                    logger.debug(f"Recorded {actual_cost} units usage for API key")
+                
                 return processed_videos
                 
         except Exception as e:
             logger.error(f"YouTube scraping failed for {channel_handle}: {e}")
+            
+            # Record failure if using pool
+            if self.api_pool and 'api_key' in locals():
+                self.api_pool.record_usage(api_key, 0, success=False, error=str(e))
+            
             raise YouTubeScrapingError(channel_handle, str(e))
     
     async def scrape_and_store_channel(
@@ -431,6 +476,23 @@ class YouTubeService:
                 "quota_used": 0,
                 "classification": {"successful": 0, "failed": 0},
                 "status": "error"
+            }
+    
+    def get_quota_status(self) -> Dict[str, Any]:
+        """
+        Get current quota status for all API keys.
+        
+        Returns:
+            Dictionary with quota usage information
+        """
+        if self.api_pool:
+            return self.api_pool.get_quota_summary()
+        else:
+            # Single key mode - return simple status
+            return {
+                "mode": "single_key",
+                "keys": [{"index": 1, "status": "active" if self.api_key else "not_configured"}],
+                "message": "Multi-key rotation not enabled"
             }
     
     async def scrape_multiple_channels(
@@ -667,6 +729,17 @@ class YouTubeService:
                             "total_classified": 0,
                             "skipped": len(content_ids)
                         }
+                    elif response.status == 202:
+                        # Accepted for async processing - this is a success!
+                        result = await response.json()
+                        logger.info(f"[OK] Batch {batch_num} for {channel_handle}: Accepted for async processing - {result.get('message', 'Processing in background')}")
+                        
+                        # For 202, we consider all items as successfully submitted
+                        return {
+                            "successful": len(content_ids),
+                            "failed": 0,
+                            "total_classified": len(content_ids)  # Marked as classified since they're processing
+                        }
                     elif response.status == 400:
                         # Bad request (shouldn't happen with our validation, but handle it)
                         error_text = await response.text()
@@ -677,7 +750,7 @@ class YouTubeService:
                             "total_classified": 0
                         }
                     else:
-                        # Other HTTP errors
+                        # Other HTTP errors (500, etc.)
                         error_text = await response.text()
                         logger.error(f"[ERROR] Batch {batch_num} for {channel_handle}: Classification API error {response.status}: {error_text}")
                         return {

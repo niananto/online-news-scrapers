@@ -38,7 +38,7 @@ class NewsSchedulerSettings(BaseSettings):
     keyword: str = Field(default="bangladesh", alias="NEWS_KEYWORD")
     limit: int = Field(default=5, ge=1, le=500, alias="NEWS_LIMIT")
     page_size: int = Field(default=25, ge=1, le=100, alias="NEWS_PAGE_SIZE")
-    interval_minutes: int = Field(default=30, ge=5, le=1440, alias="NEWS_INTERVAL_MINUTES")
+    interval_minutes: int = Field(default=60, ge=5, le=1440, alias="NEWS_INTERVAL_MINUTES")
     
     # Enhanced scheduler options
     max_instances: int = Field(default=1, ge=1, le=5)
@@ -53,19 +53,24 @@ class NewsSchedulerSettings(BaseSettings):
 class YouTubeSchedulerSettings(BaseSettings):
     """YouTube scraping scheduler configuration"""
     channels: List[str] = Field(default=[
-        '@Firstpost', '@CNN', '@BBCNews' , '@WION', '@TheStatesman' , 
+        '@Firstpost', '@CNN', '@BBCNews' , '@WION', '@TheStatesman' , '@indianexpress' ,
         '@HT-Videos', '@TheHinduOfficial', '@RepublicWorld' , '@nytimes' , '@theGuardian' , 
-        '@TheQuint', '@timesofindia', '@indiadotcom', '@NDTV' , '@Thediplomatmagazine'
+        '@TheQuint', '@timesofindia', '@indiadotcom', '@NDTV' , '@Thediplomatmagazine',
+        '@ThePioneer.' , '@TheTribunechd' , '@businessstandard' , '@TheEconomicTimes' ,
+        '@thetelegraphindiaonline' , '@indiatoday' , '@news18india' , '@abp_live' , 
+        '@WashingtonPost' , '@aljazeeraenglish' , '@DeccanHerald' , '@Reuters'
     ])
     max_results_per_channel: int = Field(default=10, ge=1, le=200, alias="YT_MAX_RESULTS")
     keywords: Optional[List[str]] = Field(default=[
-        'bangladesh', 'Younus', 'Sheikh Hasina', 'Facist Younus', 'SaveSecularBangladesh', 'StopHinduPersecution'
+        'bangladesh', 'sheikh hasina', 'Razakars', 'SaveSecularBangladesh', 'Yunus' , 'jamaat' ,
+        # 'StopHinduPersecution' , 'bangladesh AND India' , 'Bangladesh AND Pakistan' , 
+        'Bangladesh AND Hindu' , 'Bangladesh AND islamists' , 'Bangladesh AND Minorities' 
     ])
     hashtags: Optional[List[str]] = Field(default=[])
     include_comments: bool = Field(default=True)
     include_transcripts: bool = Field(default=True)
     comments_limit: int = Field(default=20, ge=1, le=100)
-    interval_minutes: int = Field(default=480, ge=5, le=1440, alias="YT_INTERVAL_MINUTES")
+    interval_minutes: int = Field(default=180, ge=5, le=1440, alias="YT_INTERVAL_MINUTES")
     
     # Enhanced options
     enabled: bool = Field(default=True)
@@ -97,9 +102,40 @@ class ClassificationAPISettings(BaseSettings):
 
 
 class YouTubeAPISettings(BaseSettings):
-    """YouTube Data API configuration"""
+    """YouTube Data API configuration with multi-key support"""
+    # Single key support (backward compatibility)
     api_key: Optional[str] = Field(default=None, alias="YOUTUBE_API_KEY")
-    quota_limit: int = Field(default=10000, ge=1000, le=50000)
+    
+    # Multi-key support (2-3 keys)
+    api_key_1: Optional[str] = Field(default=None, alias="YOUTUBE_API_KEY_1")
+    api_key_2: Optional[str] = Field(default=None, alias="YOUTUBE_API_KEY_2")
+    api_key_3: Optional[str] = Field(default=None, alias="YOUTUBE_API_KEY_3")
+    
+    # Quota configuration
+    quota_limit: int = Field(default=10000, ge=1000, le=50000, alias="YOUTUBE_QUOTA_PER_KEY")
+    enable_multi_key: bool = Field(default=True, alias="YOUTUBE_ENABLE_MULTI_KEY")
+    
+    def get_api_keys(self) -> List[str]:
+        """
+        Get all available API keys.
+        Returns multi-keys if available, otherwise falls back to single key.
+        """
+        keys = []
+        
+        # Check for multi-key configuration first
+        if self.enable_multi_key:
+            if self.api_key_1:
+                keys.append(self.api_key_1)
+            if self.api_key_2:
+                keys.append(self.api_key_2)
+            if self.api_key_3:
+                keys.append(self.api_key_3)
+        
+        # Fall back to single key if no multi-keys found
+        if not keys and self.api_key:
+            keys.append(self.api_key)
+        
+        return keys
 
 
 class AppSettings(BaseSettings):
