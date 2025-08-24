@@ -19,6 +19,9 @@ class IndianExpressScraper(BaseNewsScraper):
     BASE_URL = "https://indianexpress.com/wp-admin/admin-ajax.php"
     REQUEST_METHOD = "POST"
     RESPONSE_KIND = ResponseKind.HTML
+
+    tag_id = None
+    tag_security = None
     
     HEADERS: Dict[str, str] = {
         "accept": "application/json, text/javascript, */*; q=0.01",
@@ -50,6 +53,13 @@ class IndianExpressScraper(BaseNewsScraper):
         "peUserInActive": "3",
     }
 
+    def _fetch_tag_details(self, keyword: str) -> None:
+        resp = self.session.get("https://indianexpress.com/about/" + keyword, headers=self.HEADERS, cookies=self.COOKIES)
+        soup = BeautifulSoup(resp.content, "lxml")
+
+        self.tag_id = soup.find('input', attrs={'name': 'tag_id'})['value']
+        self.tag_security = soup.find('input', attrs={'name': 'load-tag-data-ajax-nonce'})['value']
+
     def search(
         self, keyword: str, page: int = 1, size: int = 10, **kwargs: Any
     ) -> List[Article]:
@@ -59,11 +69,14 @@ class IndianExpressScraper(BaseNewsScraper):
             print("Indian Express returns max 10 results per page – truncating from %s",size)
             size = 10
 
+        if not self.tag_id or not self.tag_security:
+            self._fetch_tag_details(keyword)
+
         self.PAYLOAD = {
             "action": "load_tag_data",
-            "tag_security": "f8924c116b",
+            "tag_security": self.tag_security,
             "tag_page": page,
-            "tag_id": self._get_tag_id_from_keyword(keyword) or "442185855",  # This is for "bangladesh"
+            "tag_id": self.tag_id,
             "post_type": "article",
             "utm_source": "",
             "profile_temp": "",
@@ -85,28 +98,28 @@ class IndianExpressScraper(BaseNewsScraper):
             raise Exception(f"HTTP error {resp.status_code}: {resp.text}")
         return resp.text
 
-    def _get_tag_id_from_keyword(self, keyword: str) -> str | None:
-        """Fetches the tag ID for a given keyword from the Indian Express website."""
-        tag_url = f"https://indianexpress.com/about/{keyword}/"
-        try:
-            resp = self.session.get(
-                tag_url,
-                headers=self.HEADERS,
-                cookies=self.COOKIES,
-                timeout=self.timeout,
-                proxies=self.proxies,
-            )
-            resp.raise_for_status() # Raise HTTPError for bad responses
-
-            link_header = resp.headers.get('Link')
-            if link_header:
-                # Regex to find the tag ID in the Link header
-                match = re.search(r'wp/v2/tags/(\d+)', link_header)
-                if match:
-                    return match.group(1)
-        except Exception as e:
-            print(f"ERROR: Error fetching tag ID for '{keyword}': {e}")
-        return None
+    # def _get_tag_id_from_keyword(self, keyword: str) -> str | None:
+    #     """Fetches the tag ID for a given keyword from the Indian Express website."""
+    #     tag_url = f"https://indianexpress.com/about/{keyword}/"
+    #     try:
+    #         resp = self.session.get(
+    #             tag_url,
+    #             headers=self.HEADERS,
+    #             cookies=self.COOKIES,
+    #             timeout=self.timeout,
+    #             proxies=self.proxies,
+    #         )
+    #         resp.raise_for_status() # Raise HTTPError for bad responses
+    #
+    #         link_header = resp.headers.get('Link')
+    #         if link_header:
+    #             # Regex to find the tag ID in the Link header
+    #             match = re.search(r'wp/v2/tags/(\d+)', link_header)
+    #             if match:
+    #                 return match.group(1)
+    #     except Exception as e:
+    #         print(f"ERROR: Error fetching tag ID for '{keyword}': {e}")
+    #     return None
 
     def _fetch_article_details(self, article: Article) -> None:
         """Fetch and parse the full article content."""
