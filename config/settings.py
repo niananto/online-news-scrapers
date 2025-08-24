@@ -38,7 +38,7 @@ class NewsSchedulerSettings(BaseSettings):
     keyword: str = Field(default="bangladesh", alias="NEWS_KEYWORD")
     limit: int = Field(default=5, ge=1, le=500, alias="NEWS_LIMIT")
     page_size: int = Field(default=25, ge=1, le=100, alias="NEWS_PAGE_SIZE")
-    interval_minutes: int = Field(default=60, ge=5, le=1440, alias="NEWS_INTERVAL_MINUTES")
+    interval_minutes: int = Field(default=30, ge=5, le=1440, alias="NEWS_INTERVAL_MINUTES")
     
     # Enhanced scheduler options
     max_instances: int = Field(default=1, ge=1, le=5)
