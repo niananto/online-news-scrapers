@@ -58,7 +58,7 @@ google-cloud-speech==2.17.3
 googleapis-common-protos==1.70.0
 grpcio==1.74.0
 grpcio-status==1.62.3
-yt-dlp==2025.7.21
+yt-dlp==2025.08.20
 youtube-transcript-api==1.2.2
 
 # Additional YouTube working environment packages

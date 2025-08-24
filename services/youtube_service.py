@@ -704,22 +704,7 @@ class YouTubeService:
             
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(url, json=payload) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        # Response format: {"results": [...], "total_classified": N}
-                        total_classified = result.get('total_classified', 0)
-                        total_requested = len(content_ids)
-                        failed_count = total_requested - total_classified
-                        
-                        elapsed_time = time.time() - start_time
-                        logger.info(f"[OK] Batch {batch_num} for {channel_handle}: {total_classified} classified out of {total_requested} requested (took {elapsed_time:.1f}s)")
-                        
-                        return {
-                            "successful": total_classified,
-                            "failed": failed_count,
-                            "total_classified": total_classified
-                        }
-                    elif response.status == 404:
+                    if response.status == 404:
                         # All items were skipped - not an error, just no content to classify
                         error_text = await response.text()
                         logger.warning(f"[WARN] Batch {batch_num} for {channel_handle}: All videos skipped for classification: {error_text}")
